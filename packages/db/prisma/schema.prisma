@@ -1,0 +1,430 @@
+// Referral Copilot schema. See docs/IMPLEMENTATION_PLAN.md §5.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ───────────── Auth (Better Auth core models; field names must match) ─────────────
+
+model User {
+  id            String    @id
+  name          String
+  email         String    @unique
+  emailVerified Boolean   @default(false)
+  image         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  sessions      Session[]
+  accounts      Account[]
+
+  profile    UserProfile?
+  educations Education[]
+  companies  Company[]
+  jobs       JobOpportunity[]
+  contacts   Contact[]
+  outreach   Outreach[]
+  aiRuns     AiRun[]
+
+  @@map("user")
+}
+
+model Session {
+  id        String   @id
+  expiresAt DateTime
+  token     String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([userId])
+  @@map("account")
+}
+
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
+  @@map("verification")
+}
+
+// ───────────── Profile ─────────────
+
+model UserProfile {
+  userId             String   @id
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  headline           String?
+  degree             String?
+  field              String?
+  graduationYear     Int?
+  currentSemester    Int?
+  skills             String[]
+  /// [{ name, oneLiner, tech[] }]: the AI may only cite what is written here.
+  projects           Json     @default("[]")
+  resumeUrl          String?
+  linkedinUrl        String?
+  githubUrl          String?
+  portfolioUrl       String?
+  preferredRoles     String[]
+  preferredLocations String[]
+  /// { signOffName, dailyInviteCap, weeklyInviteCap, scoringWeights }
+  settings           Json     @default("{}")
+  updatedAt          DateTime @updatedAt
+
+  @@map("user_profile")
+}
+
+model Institution {
+  id             String             @id @default(cuid())
+  name           String
+  normalizedName String             @unique
+  aliases        InstitutionAlias[]
+  educations     Education[]
+
+  @@map("institution")
+}
+
+model InstitutionAlias {
+  id              String      @id @default(cuid())
+  institutionId   String
+  institution     Institution @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  alias           String
+  normalizedAlias String      @unique
+
+  @@map("institution_alias")
+}
+
+/// Shared shape for the user's and contacts' education, so the alumni check is one join.
+model Education {
+  id             String       @id @default(cuid())
+  userId         String?
+  user           User?        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  contactId      String?
+  contact        Contact?     @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  institutionId  String?
+  institution    Institution? @relation(fields: [institutionId], references: [id])
+  institutionRaw String
+  degree         String?
+  field          String?
+  startYear      Int?
+  endYear        Int?
+
+  @@index([userId])
+  @@index([contactId])
+  @@map("education")
+}
+
+// ───────────── Jobs & people ─────────────
+
+model Company {
+  id               String           @id @default(cuid())
+  userId           String
+  user             User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name             String
+  normalizedName   String
+  domain           String?
+  linkedinSlug     String?
+  hasReferralBonus Boolean?
+  isSample         Boolean          @default(false)
+  createdAt        DateTime         @default(now())
+  jobs             JobOpportunity[]
+  contacts         Contact[]
+
+  @@unique([userId, normalizedName])
+  @@map("company")
+}
+
+enum JobStatus {
+  ACTIVE
+  APPLIED
+  CLOSED
+  ARCHIVED
+}
+
+model JobOpportunity {
+  id             String         @id @default(cuid())
+  userId         String
+  user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  companyId      String
+  company        Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  title          String
+  externalJobId  String?
+  url            String?
+  location       String?
+  descriptionRaw String?
+  /// LLM output; shape is versioned by the prompt, read whole.
+  analysis       Json?
+  status         JobStatus      @default(ACTIVE)
+  deadline       DateTime?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  outreach       Outreach[]
+  discoveryRuns  DiscoveryRun[]
+
+  @@index([userId, status])
+  @@map("job_opportunity")
+}
+
+enum Seniority {
+  INTERN
+  JUNIOR
+  MID
+  SENIOR
+  STAFF_PLUS
+  MANAGER
+  DIRECTOR_PLUS
+  UNKNOWN
+}
+
+enum JobFunction {
+  ENGINEERING
+  RECRUITING
+  PRODUCT
+  DATA
+  OTHER
+  UNKNOWN
+}
+
+enum ContactSource {
+  AI_SEARCH
+  PEOPLE_TAB_PASTE
+  PROFILE_PASTE
+  MANUAL
+  SAMPLE
+}
+
+enum DataConfidence {
+  USER_VERIFIED
+  LINKEDIN_PASTE
+  WEB_EVIDENCE
+}
+
+model Contact {
+  id           String         @id @default(cuid())
+  userId       String
+  user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  companyId    String
+  company      Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  fullName     String
+  linkedinUrl  String?
+  headline     String?
+  currentTitle String?
+  location     String?
+  seniority    Seniority      @default(UNKNOWN)
+  function     JobFunction    @default(UNKNOWN)
+  source       ContactSource
+  confidence   DataConfidence @default(WEB_EVIDENCE)
+  /// Where the person was found: [{ title, url, snippet }]
+  evidence     Json           @default("[]")
+  isConnected  Boolean        @default(false)
+  notes        String?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  educations   Education[]
+  tags         ContactTag[]
+  outreach     Outreach[]
+
+  @@unique([userId, linkedinUrl])
+  @@index([userId, companyId])
+  @@map("contact")
+}
+
+enum RelationshipTag {
+  COLLEGE_ALUMNI
+  SAME_COLLEGE_DIFFERENT_COURSE
+  RECRUITER
+  HIRING_MANAGER
+  OPEN_TO_REFER
+}
+
+enum TagSource {
+  RULE
+  AI
+  USER
+}
+
+model ContactTag {
+  contactId String
+  contact   Contact         @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  tag       RelationshipTag
+  evidence  String?
+  source    TagSource
+
+  @@id([contactId, tag])
+  @@map("contact_tag")
+}
+
+// ───────────── Pipeline ─────────────
+
+enum OutreachState {
+  DISCOVERED
+  CONNECTION_SENT
+  ACCEPTED_MESSAGE_READY
+  AWAITING_REPLY
+  IN_CONVERSATION
+  REFERRAL_RECEIVED
+  DECLINED
+  NO_RESPONSE
+  DROPPED
+  SKIPPED
+  WRONG_PERSON
+  JOB_CLOSED
+  STOPPED
+}
+
+model Outreach {
+  id             String          @id @default(cuid())
+  userId         String
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  jobId          String
+  job            JobOpportunity  @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  contactId      String
+  contact        Contact         @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  rank           Int?
+  isReserve      Boolean         @default(false)
+  matchScore     Int?
+  scoreBreakdown Json?
+  state          OutreachState   @default(DISCOVERED)
+  stateChangedAt DateTime        @default(now())
+  nextCheckAt    DateTime?
+  followupCount  Int             @default(0)
+  lastSentAt     DateTime?
+  version        Int             @default(0)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  events         OutreachEvent[]
+  messages       Message[]
+
+  @@unique([jobId, contactId])
+  @@index([userId, nextCheckAt])
+  @@index([contactId])
+  @@map("outreach")
+}
+
+model OutreachEvent {
+  id         String         @id @default(cuid())
+  outreachId String
+  outreach   Outreach       @relation(fields: [outreachId], references: [id], onDelete: Cascade)
+  type       String
+  fromState  OutreachState?
+  toState    OutreachState?
+  payload    Json?
+  createdAt  DateTime       @default(now())
+
+  @@index([outreachId, createdAt])
+  @@map("outreach_event")
+}
+
+enum MessageKind {
+  CONNECTION_NOTE
+  REFERRAL_REQUEST
+  FOLLOW_UP
+  RESUME_SHARE
+  THANK_YOU
+  THANKS_ANYWAY
+  REPLY_RESPONSE
+  INBOUND_REPLY
+}
+
+enum MessageStatus {
+  DRAFT
+  SENT
+  DISCARDED
+}
+
+model Message {
+  id           String        @id @default(cuid())
+  outreachId   String
+  outreach     Outreach      @relation(fields: [outreachId], references: [id], onDelete: Cascade)
+  kind         MessageKind
+  status       MessageStatus @default(DRAFT)
+  body         String
+  factsUsed    Json?
+  aiRunId      String?
+  editedByUser Boolean       @default(false)
+  sentAt       DateTime?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  @@index([outreachId])
+  @@map("message")
+}
+
+// ───────────── AI bookkeeping ─────────────
+
+enum RunStatus {
+  RUNNING
+  DONE
+  FAILED
+}
+
+model DiscoveryRun {
+  id                 String         @id @default(cuid())
+  jobId              String
+  job                JobOpportunity @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  status             RunStatus      @default(RUNNING)
+  progress           Json?
+  queries            Json?
+  candidatesFound    Int            @default(0)
+  candidatesVerified Int            @default(0)
+  error              String?
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+
+  @@index([jobId])
+  @@map("discovery_run")
+}
+
+model AiRun {
+  id               String   @id @default(cuid())
+  userId           String
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  task             String
+  provider         String
+  model            String
+  promptVersion    String
+  inputHash        String
+  output           Json?
+  validationStatus String?
+  tokensIn         Int?
+  tokensOut        Int?
+  latencyMs        Int?
+  fellBack         Boolean  @default(false)
+  error            String?
+  createdAt        DateTime @default(now())
+
+  @@index([userId, task, inputHash])
+  @@map("ai_run")
+}

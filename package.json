@@ -1,0 +1,17 @@
+{
+  "name": "referral-copilot",
+  "private": true,
+  "packageManager": "pnpm@12.11.2",
+  "scripts": {
+    "dev": "concurrently -k -n api,web -c blue,green \"npm --prefix apps/api run dev\" \"npm --prefix apps/web run dev\"",
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "db:migrate": "pnpm --filter @rc/db migrate",
+    "db:generate": "pnpm --filter @rc/db generate",
+    "db:studio": "pnpm --filter @rc/db studio"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.5"
+  }
+}
