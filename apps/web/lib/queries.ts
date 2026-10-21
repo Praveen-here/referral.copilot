@@ -114,7 +114,7 @@ export function useOutreachEvent() {
   const { toast } = useFeedback();
   return useMutation({
     mutationKey: OUTREACH_EVENT_KEY,
-    mutationFn: ({ person, type }: { person: Pick<Person, "id" | "version" | "contact">; type: OutreachEvent }) =>
+    mutationFn: ({ person, type }: { person: { id: string; version: number; contact: { fullName: string } }; type: OutreachEvent }) =>
       api(`/outreach/${person.id}/events`, { method: "POST", json: { type, expectedVersion: person.version } }),
     onMutate: async ({ person, type }) => {
       await Promise.all([qc.cancelQueries({ queryKey: ["job"] }), qc.cancelQueries({ queryKey: keys.today })]);

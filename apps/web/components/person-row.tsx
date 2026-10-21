@@ -47,7 +47,18 @@ function draftFor(p: Person): { template: TemplateKind; sentEvent: OutreachEvent
   return null;
 }
 
-export function PersonRow({ person, companyName, showJob }: { person: Person; companyName: string; showJob?: boolean }) {
+export function PersonRow({
+  person,
+  companyName,
+  showJob,
+  highlighted,
+}: {
+  person: Person;
+  companyName: string;
+  showJob?: boolean;
+  /** Briefly marks the row someone navigated to from search. */
+  highlighted?: boolean;
+}) {
   const event = useOutreachEvent();
   const refresh = useRefreshPipeline();
   const { askOnReturn } = useFeedback();
@@ -72,7 +83,15 @@ export function PersonRow({ person, companyName, showJob }: { person: Person; co
   const meta = [statusLine(person), ...reasons].filter(Boolean).join(" · ");
 
   return (
-    <motion.li layout="position" transition={spring} className="rounded-card px-3 py-3 transition-colors hover:bg-[#fafafa]">
+    <motion.li
+      id={`person-${person.id}`}
+      layout="position"
+      transition={spring}
+      className={cn(
+        "scroll-mt-24 rounded-card px-3 py-3 transition-[background-color,box-shadow] duration-500",
+        highlighted ? "bg-accent-soft shadow-[inset_0_0_0_1px_rgba(0,113,227,0.25)]" : "hover:bg-[#fafafa]",
+      )}
+    >
       <div className="flex items-start gap-3">
         <Avatar name={person.contact.fullName} size={36} />
 

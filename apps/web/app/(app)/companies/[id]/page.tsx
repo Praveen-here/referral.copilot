@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "motion/react";
 import { ExternalLink, Search, Trash2, UserPlus } from "lucide-react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import type { PipelineTab } from "@rc/core";
 import { AddPersonSheet } from "@/components/add-person-sheet";
 import { DiscoveryPanel } from "@/components/discovery-panel";
@@ -52,8 +52,31 @@ function Company() {
   const activeJobs = company?.jobs.filter((j) => j.status !== "ARCHIVED") ?? [];
   const jobId = search.get("job") ?? activeJobs[0]?.id ?? null;
   const { data: detail } = useJob(jobId);
-  const [tab, setTab] = useState<PipelineTab>("to_connect");
+  const [tab, setTab] = useState<PipelineTab>(() => (search.get("tab") as PipelineTab | null) ?? "to_connect");
   const [adding, setAdding] = useState(false);
+  const [highlight, setHighlight] = useState<string | null>(null);
+
+  // Links from search (?tab=…&person=…) open the right tab and bring that person into view.
+  const linkedTab = search.get("tab") as PipelineTab | null;
+  const linkedPerson = search.get("person");
+  useEffect(() => {
+    if (linkedTab) setTab(linkedTab);
+  }, [linkedTab]);
+  const handledLink = useRef<string | null>(null);
+  useEffect(() => {
+    const key = `${linkedPerson}:${linkedTab}`;
+    if (!linkedPerson || handledLink.current === key || !detail?.people.some((p) => p.id === linkedPerson)) return;
+    handledLink.current = key; // once per link, not on every background refetch
+    setHighlight(linkedPerson);
+    const frame = requestAnimationFrame(() =>
+      document.getElementById(`person-${linkedPerson}`)?.scrollIntoView({ block: "center", behavior: "smooth" }),
+    );
+    const timer = setTimeout(() => setHighlight(null), 2500);
+    return () => {
+      cancelAnimationFrame(frame);
+      clearTimeout(timer);
+    };
+  }, [linkedPerson, linkedTab, detail]);
 
   const remove = useMutation({
     mutationFn: () => api(company?.isSample ? "/sample-data" : `/companies/${id}`, { method: "DELETE" }),
@@ -195,7 +218,7 @@ function Company() {
               {people.length > 0 ? (
                 <ul className="-mx-3 flex flex-col">
                   {people.map((p) => (
-                    <PersonRow key={p.id} person={p} companyName={name} />
+                    <PersonRow key={p.id} person={p} companyName={name} highlighted={highlight === p.id} />
                   ))}
                 </ul>
               ) : tab === "to_connect" && detail.people.length === 0 ? (

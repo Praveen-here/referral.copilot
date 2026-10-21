@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
-import { OUTREACH_EVENTS, stripDashes } from "@rc/core";
+import { OUTREACH_EVENTS, stripDashes, tabForState } from "@rc/core";
 import { prisma, Prisma } from "@rc/db";
 import { env } from "../env";
 import { HttpError, notFound } from "../http/errors";
@@ -80,6 +80,42 @@ v1.get("/today", async (_req, res) => {
 
 v1.get("/invite-budget", async (_req, res) => {
   res.json(await inviteBudget(res.locals.userId));
+});
+
+// ───────────── Search ─────────────
+
+/** People by name across every job, e.g. after a LinkedIn "accepted your invitation" notification. */
+v1.get("/search", async (req, res) => {
+  const q = z.string().trim().min(1).max(100).parse(req.query.q);
+  const terms = q.split(/\s+/).slice(0, 4);
+  const contacts = await prisma.contact.findMany({
+    where: { userId: res.locals.userId, AND: terms.map((t) => ({ fullName: { contains: t, mode: "insensitive" as const } })) },
+    include: {
+      company: { select: { id: true, name: true } },
+      tags: { select: { tag: true } },
+      outreach: { include: { job: { select: { id: true, title: true, status: true } } }, orderBy: { updatedAt: "desc" } },
+    },
+    orderBy: { updatedAt: "desc" },
+    take: 20,
+  });
+  const first = q.toLowerCase();
+  const results = contacts
+    // Names that start with the query come first.
+    .sort((a, b) => Number(b.fullName.toLowerCase().startsWith(first)) - Number(a.fullName.toLowerCase().startsWith(first)))
+    .flatMap((c) =>
+      c.outreach.map((o) => ({
+        id: o.id,
+        version: o.version,
+        state: o.state,
+        tab: tabForState(o.state),
+        isAlumni: c.tags.some((t) => t.tag === "COLLEGE_ALUMNI"),
+        contact: { id: c.id, fullName: c.fullName, currentTitle: c.currentTitle, linkedinUrl: c.linkedinUrl },
+        company: c.company,
+        job: o.job,
+      })),
+    )
+    .slice(0, 10);
+  res.json({ results });
 });
 
 // ───────────── Companies & jobs ─────────────

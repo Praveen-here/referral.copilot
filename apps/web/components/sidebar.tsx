@@ -1,14 +1,15 @@
 "use client";
 
 import { motion } from "motion/react";
-import { CircleUserRound, LogOut, Plus, Sun } from "lucide-react";
+import { CircleUserRound, LogOut, Plus, Search, Sun } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { authClient } from "@/lib/auth-client";
 import { cn } from "@/lib/cn";
 import { useMe, useSidebar } from "@/lib/queries";
 import { NewJobSheet } from "./new-job-sheet";
+import { SearchPalette } from "./search-palette";
 import { Avatar, Logo, spring } from "./ui";
 
 export function Sidebar() {
@@ -17,6 +18,20 @@ export function Sidebar() {
   const { data: companies } = useSidebar();
   const { data: me } = useMe();
   const [newJob, setNewJob] = useState(false);
+  const [searching, setSearching] = useState(false);
+
+  // Ctrl/Cmd+K or "/" opens people search from anywhere.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const typing = e.target instanceof HTMLElement && (e.target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(e.target.tagName));
+      if ((e.key.toLowerCase() === "k" && (e.ctrlKey || e.metaKey)) || (e.key === "/" && !typing)) {
+        e.preventDefault();
+        setSearching(true);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   return (
     <aside className="flex h-full w-60 shrink-0 flex-col border-r border-line bg-sidebar">
@@ -26,6 +41,14 @@ export function Sidebar() {
       </div>
 
       <nav className="flex flex-col gap-0.5 px-2">
+        <button
+          onClick={() => setSearching(true)}
+          className="pressable flex h-8 items-center gap-2.5 rounded-control px-2.5 text-left text-ink-2 hover:bg-pressed hover:text-ink"
+        >
+          <Search size={16} className="w-4 text-ink-2" />
+          <span className="flex-1">Search</span>
+          <kbd className="rounded-[4px] border border-line-strong bg-canvas px-1.5 font-sans text-[0.6875rem] text-ink-3">Ctrl K</kbd>
+        </button>
         <NavItem href="/" active={pathname === "/"} icon={<Sun size={16} />} label="Today" />
       </nav>
 
@@ -82,6 +105,7 @@ export function Sidebar() {
       </div>
 
       <NewJobSheet open={newJob} onClose={() => setNewJob(false)} />
+      <SearchPalette open={searching} onClose={() => setSearching(false)} />
     </aside>
   );
 }
