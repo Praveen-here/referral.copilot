@@ -27,6 +27,8 @@ export interface Candidate extends ParsedProfile {
   currentTitle: string | null;
   school: string | null;
   isAlumni: boolean;
+  /** Known from a pasted "1st" badge; search results can't tell. */
+  isConnected?: boolean;
   /** The exact source text that proves each claim, for the UI and audits. */
   evidence: { claim: string; text: string }[];
 }
@@ -76,26 +78,46 @@ const FORMER = /\b(ex[-\s]|former(ly)?|previously|past|alumni of|retired)\b/i;
 
 export function verifyCandidate(
   p: ParsedProfile,
-  ctx: { companyNames: string[]; university: string | null },
+  ctx: {
+    companyNames: string[];
+    university: string | null;
+    /** The source itself guarantees current employment (a company's LinkedIn People page). */
+    trustCompany?: boolean;
+    /** The source guarantees the school (People page filtered by the user's college). */
+    trustAlumni?: boolean;
+  },
 ): { ok: true; candidate: Candidate } | { ok: false; reason: Rejection } {
   if (!p.fullName || p.fullName.length < 3 || /linkedin/i.test(p.fullName) || p.fullName.split(/\s+/).length > 5) {
     return { ok: false, reason: "NO_NAME" };
   }
   const evidence: Candidate["evidence"] = [];
 
-  // Current employer: the snippet's Experience field, or the title segment.
+  // Current employer: the snippet's Experience field or the title segment; failing
+  // that, a present-tense "… at Company" / "@Company" in the snippet ("I'm a SWE at Alaan").
   const current = [p.experience, p.titleText].filter(Boolean) as string[];
-  const companyHit = current.find((t) => ctx.companyNames.some((c) => wordMatch(t, c)));
-  if (!companyHit) return { ok: false, reason: "NOT_AT_COMPANY" };
-  const formerHit = ctx.companyNames.some((c) => new RegExp(`${FORMER.source}[^·|]{0,20}${escapeRegex(c)}`, "i").test(companyHit));
-  if (formerHit) return { ok: false, reason: "FORMER_EMPLOYEE" };
+  let companyHit = current.find((t) => ctx.companyNames.some((c) => wordMatch(t, c))) ?? null;
+  if (companyHit) {
+    const formerHit = ctx.companyNames.some((c) => new RegExp(`${FORMER.source}[^·|]{0,20}${escapeRegex(c)}`, "i").test(companyHit!));
+    if (formerHit) return { ok: false, reason: "FORMER_EMPLOYEE" };
+  } else {
+    companyHit = currentRoleInText(p.text, ctx.companyNames);
+    if (!companyHit && ctx.trustCompany) {
+      // Listed on the company's own People page, unless the headline says they've left.
+      if (/\bex[-\s]|former(ly)?\b/i.test(p.titleText ?? "")) return { ok: false, reason: "FORMER_EMPLOYEE" };
+      companyHit = "Listed on the company's LinkedIn People page";
+    }
+    if (!companyHit) return { ok: false, reason: "NOT_AT_COMPANY" };
+  }
   evidence.push({ claim: "Works at the company", text: companyHit });
 
   // School: only from the Education field, or the user's own school named in the text.
   let school = p.education;
   let isAlumni = false;
   if (ctx.university) {
-    if (isSameInstitution(p.education, ctx.university)) isAlumni = true;
+    if (ctx.trustAlumni) {
+      isAlumni = true;
+      school = ctx.university;
+    } else if (isSameInstitution(p.education, ctx.university)) isAlumni = true;
     else {
       const named = institutionAliases(ctx.university).find((alias) => alias.length > 4 && wordMatch(p.text, alias));
       if (named) {
@@ -127,6 +149,21 @@ export function cleanTitle(titleText: string | null, companyNames: string[], sch
       return rest.trim().length > 1;
     });
   return segments[0] ?? null;
+}
+
+const PAST_ROLE = /\b(ex[-\s]?|former(ly)?|previously|past|worked|interned|was|alumn[ia]|left|until)\b[^.·|]{0,30}$/i;
+
+/** Present-tense "at/@ Company" in free text; null when absent or clearly a past role. */
+function currentRoleInText(text: string, companyNames: string[]): string | null {
+  for (const name of companyNames) {
+    const re = new RegExp(`(?:\\bat\\b|@)\\s*${escapeRegex(name)}(?![a-z0-9])`, "gi");
+    for (const m of text.matchAll(re)) {
+      const before = text.slice(Math.max(0, m.index - 40), m.index);
+      if (PAST_ROLE.test(before)) continue;
+      return text.slice(Math.max(0, m.index - 40), m.index + m[0].length).trim();
+    }
+  }
+  return null;
 }
 
 function escapeRegex(s: string) {

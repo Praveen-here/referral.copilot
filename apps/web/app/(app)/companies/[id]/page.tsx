@@ -2,12 +2,13 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "motion/react";
-import { ExternalLink, Search, Trash2, UserPlus } from "lucide-react";
+import { ClipboardPaste, ExternalLink, Search, Trash2, UserPlus } from "lucide-react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef, useState } from "react";
 import type { PipelineTab } from "@rc/core";
 import { AddPersonSheet } from "@/components/add-person-sheet";
 import { DiscoveryPanel } from "@/components/discovery-panel";
+import { PastePeopleSheet } from "@/components/paste-people-sheet";
 import { PersonRow } from "@/components/person-row";
 import { Badge, Button, EmptyState, Segmented, Spinner, spring } from "@/components/ui";
 import { api } from "@/lib/api";
@@ -54,6 +55,7 @@ function Company() {
   const { data: detail } = useJob(jobId);
   const [tab, setTab] = useState<PipelineTab>(() => (search.get("tab") as PipelineTab | null) ?? "to_connect");
   const [adding, setAdding] = useState(false);
+  const [pasting, setPasting] = useState(false);
   const [highlight, setHighlight] = useState<string | null>(null);
 
   // Links from search (?tab=…&person=…) open the right tab and bring that person into view.
@@ -189,7 +191,7 @@ function Company() {
 
       {job && !company.isSample && (
         <div className="mt-6">
-          <DiscoveryPanel jobId={job.id} hasPeople={(detail?.people.length ?? 0) > 0} />
+          <DiscoveryPanel jobId={job.id} hasPeople={(detail?.people.length ?? 0) > 0} companyName={name} onPaste={() => setPasting(true)} />
         </div>
       )}
 
@@ -202,9 +204,16 @@ function Company() {
               onChange={setTab}
               options={TABS.map((t) => ({ value: t.value, label: t.label, count: detail.counts[t.value] }))}
             />
-            <Button size="sm" icon={<UserPlus size={14} />} onClick={() => setAdding(true)}>
-              Add person
-            </Button>
+            <div className="flex gap-1.5">
+              {!company.isSample && (
+                <Button size="sm" icon={<ClipboardPaste size={14} />} onClick={() => setPasting(true)}>
+                  From LinkedIn
+                </Button>
+              )}
+              <Button size="sm" icon={<UserPlus size={14} />} onClick={() => setAdding(true)}>
+                Add person
+              </Button>
+            </div>
           </div>
           <p className="mt-3 px-1 text-caption text-ink-3">{hint}</p>
 
@@ -258,6 +267,7 @@ function Company() {
       )}
 
       {jobId && <AddPersonSheet jobId={jobId} open={adding} onClose={() => setAdding(false)} />}
+      {jobId && <PastePeopleSheet jobId={jobId} companyName={name} open={pasting} onClose={() => setPasting(false)} />}
     </div>
   );
 }

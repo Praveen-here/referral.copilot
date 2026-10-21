@@ -1,7 +1,7 @@
 // Discovery run (plan §9.1): analyze → search → verify → classify → rank → save.
 // Runs in-process (no queue in v1); progress lives on the discovery_run row.
 
-import { classifyPeopleTask, type Classification, type JobAnalysis } from "@rc/ai";
+import { classifyPeopleTask, parsePeopleTask, type Classification, type JobAnalysis } from "@rc/ai";
 import {
   heuristicFunction,
   heuristicSeniority,
@@ -96,16 +96,67 @@ export async function runDiscovery(userId: string, jobId: string, runId: string,
     else if (!byUrl.has(v.candidate.url)) byUrl.set(v.candidate.url, v.candidate);
   }
 
-  // People already on this job's list are not suggested again.
+  // 4–5. Classify, rank and save.
+  await progress(runId, "RANKING", { candidatesVerified: byUrl.size });
+  const { top, reserves } = await rankAndSave(userId, job, analysis, [...byUrl.values()], "WEB_EVIDENCE", () => progress(runId, "SAVING"));
+
+  await prisma.discoveryRun.update({
+    where: { id: runId },
+    data: {
+      status: "DONE",
+      progress: {
+        step: "DONE",
+        added: top.length,
+        reserves: reserves.length,
+        alumniFound: [...top, ...reserves].filter((s) => s.candidate.isAlumni).length,
+        university,
+        rejections,
+        failedQueries: failures.length,
+      },
+    },
+  });
+}
+
+type JobWithCompany = Prisma.JobOpportunityGetPayload<{ include: { company: true } }>;
+type Confidence = "WEB_EVIDENCE" | "LINKEDIN_PASTE";
+
+const PASTED = "pasted:";
+const isPasted = (key: string) => key.startsWith(PASTED);
+
+/**
+ * Shared by web discovery and LinkedIn-page pastes: skip people already on this job,
+ * classify (AI, rules fallback), score, pick the top + reserves, and save in batches.
+ */
+async function rankAndSave(
+  userId: string,
+  job: JobWithCompany,
+  analysis: JobAnalysis,
+  verified: Candidate[],
+  confidence: Confidence,
+  beforeSave?: () => Promise<void>,
+  opts: { top: number; reserves: number } = { top: 15, reserves: 10 },
+) {
+  // Existing contacts: by profile URL for web results, by name within the company for pastes.
+  const urls = verified.map((c) => c.url).filter((u) => !isPasted(u));
+  const names = verified.filter((c) => isPasted(c.url)).map((c) => c.fullName);
   const existing = await prisma.contact.findMany({
-    where: { userId, linkedinUrl: { in: [...byUrl.keys()] } },
+    where: {
+      userId,
+      OR: [
+        ...(urls.length ? [{ linkedinUrl: { in: urls } }] : []),
+        ...(names.length ? [{ companyId: job.companyId, fullName: { in: names, mode: "insensitive" as const } }] : []),
+      ],
+    },
     include: { outreach: true },
   });
-  const existingByUrl = new Map(existing.map((c) => [c.linkedinUrl!, c]));
-  const candidates = [...byUrl.values()].filter((c) => !existingByUrl.get(c.url)?.outreach.some((o) => o.jobId === jobId)).slice(0, MAX_TO_CLASSIFY);
+  const keyOf = (c: { linkedinUrl: string | null; fullName: string }) => c.linkedinUrl ?? `${PASTED}${normalizeName(c.fullName)}`;
+  const existingByKey = new Map<string, (typeof existing)[number]>();
+  for (const c of existing) {
+    existingByKey.set(keyOf(c), c);
+    existingByKey.set(`${PASTED}${normalizeName(c.fullName)}`, c);
+  }
+  const candidates = verified.filter((c) => !existingByKey.get(c.url)?.outreach.some((o) => o.jobId === job.id)).slice(0, MAX_TO_CLASSIFY);
 
-  // 4. Classify and rank.
-  await progress(runId, "RANKING", { candidatesVerified: byUrl.size });
   const classes = await classify(userId, analysis, candidates);
   const city = normalizeName((job.location ?? analysis.location ?? "").split(",")[0] ?? "");
   const keywords = [...analysis.requiredSkills, ...analysis.preferredSkills, ...analysis.domains];
@@ -113,7 +164,7 @@ export async function runDiscovery(userId: string, jobId: string, runId: string,
 
   const scored = candidates.map((c, i) => {
     const cls = classes.get(String(i));
-    const known = existingByUrl.get(c.url);
+    const known = existingByKey.get(c.url);
     const seniority = cls?.seniority ?? heuristicSeniority(c.titleText ?? c.headline);
     const fn = cls?.function ?? heuristicFunction(c.titleText ?? c.headline);
     const score: Score = scoreCandidate(
@@ -123,33 +174,109 @@ export async function runDiscovery(userId: string, jobId: string, runId: string,
         seniority,
         function: fn,
         domainOverlap: keywordOverlap(c.headline, keywords),
-        alreadyConnected: known?.isConnected ?? false,
+        alreadyConnected: Boolean(known?.isConnected || c.isConnected),
         sameLocation: Boolean(city && c.location && normalizeName(c.location).includes(city)),
         // Explicit offers only: a recruiter's "University Hiring" title isn't one.
         openToRefer: /\b(referrals?|happy to refer|dm (me )?for|we'?re hiring|#hiring)\b/i.test(c.text),
         companyReferralBonus: job.company.hasReferralBonus === true,
         recentlyContactedForOtherJob: Boolean(known?.outreach.some((o) => o.lastSentAt && now - o.lastSentAt.getTime() < 30 * DAY)),
         previouslyDeclined: Boolean(known?.outreach.some((o) => o.state === "DECLINED")),
-        confidence: "WEB_EVIDENCE",
+        confidence,
       },
       undefined,
       { school: c.isAlumni ? c.school : null },
     );
     return { candidate: c, score, seniority, fn };
   });
-  const { top, reserves } = selectTop(scored);
+  const { top, reserves } = selectTop(scored, { ...opts, maxRecruiters: 2 });
 
-  // 5. Save in a few batched writes (each round trip to the database is ~150ms).
-  await progress(runId, "SAVING");
-  await saveCandidates(userId, job.id, job.companyId, [...top.map((s) => ({ ...s, isReserve: false })), ...reserves.map((s) => ({ ...s, isReserve: true }))], existingByUrl);
+  await beforeSave?.();
+  await saveCandidates(
+    userId,
+    job.id,
+    job.companyId,
+    [...top.map((s) => ({ ...s, isReserve: false })), ...reserves.map((s) => ({ ...s, isReserve: true }))],
+    existingByKey,
+    confidence,
+  );
+  return { top, reserves, skippedExisting: verified.length - candidates.length };
+}
 
-  await prisma.discoveryRun.update({
-    where: { id: runId },
-    data: {
-      status: "DONE",
-      progress: { step: "DONE", added: top.length, reserves: reserves.length, rejections, failedQueries: failures.length },
-    },
+export interface PasteSummary {
+  added: number;
+  alumni: number;
+  alreadyOnList: number;
+  skipped: Partial<Record<Rejection | "NOT_IN_TEXT", number>>;
+}
+
+/**
+ * People copied from a LinkedIn page by the user (plan §9.1, People-tab paste). The AI only
+ * extracts; every name must appear verbatim in the pasted text, then the usual checks run.
+ * `source` says what the page was, which decides what can be taken as given.
+ */
+export async function addPastedPeople(
+  userId: string,
+  jobId: string,
+  text: string,
+  source: "COMPANY_PEOPLE" | "COMPANY_PEOPLE_COLLEGE" | "SEARCH",
+): Promise<PasteSummary> {
+  const analysis = await ensureAnalysis(userId, jobId);
+  const [job, education] = await Promise.all([
+    prisma.jobOpportunity.findFirstOrThrow({ where: { id: jobId, userId }, include: { company: true } }),
+    prisma.education.findFirst({ where: { userId } }),
+  ]);
+  const university = education?.institutionRaw ?? null;
+  const companyNames = dedupeNames([job.company.name, analysis.company, ...analysis.companyAliases]);
+
+  const { data } = await runAi(userId, parsePeopleTask(text));
+  const haystack = normalizeName(text);
+  const inText = (s: string | null) => (s && haystack.includes(normalizeName(s)) ? s : null);
+
+  const skipped: PasteSummary["skipped"] = {};
+  const byKey = new Map<string, Candidate>();
+  for (const person of data.people) {
+    // Anti-hallucination: the name (and every other field) must literally be in the paste.
+    if (!inText(person.fullName) || /linkedin member/i.test(person.fullName)) {
+      skipped.NOT_IN_TEXT = (skipped.NOT_IN_TEXT ?? 0) + 1;
+      continue;
+    }
+    const headline = inText(person.headline);
+    const current = inText(person.currentLine)?.replace(/^current:\s*/i, "") ?? null;
+    const school = inText(person.schoolText);
+    const parsed = {
+      url: `${PASTED}${normalizeName(person.fullName)}`,
+      fullName: person.fullName.trim(),
+      titleText: headline,
+      headline: [headline, current].filter(Boolean).join(" · ") || person.fullName,
+      experience: current,
+      education: school,
+      location: inText(person.location),
+      text: [person.fullName, headline, current, school, person.location].filter(Boolean).join("\n"),
+    };
+    const v = verifyCandidate(parsed, {
+      companyNames,
+      university,
+      trustCompany: source !== "SEARCH",
+      trustAlumni: source === "COMPANY_PEOPLE_COLLEGE",
+    });
+    if (!v.ok) {
+      skipped[v.reason] = (skipped[v.reason] ?? 0) + 1;
+      continue;
+    }
+    byKey.set(parsed.url, { ...v.candidate, isConnected: person.degree === "1st" });
+  }
+
+  // Everything pasted is kept; anything beyond the visible list (e.g. extra recruiters) goes to reserves.
+  const { top, reserves, skippedExisting } = await rankAndSave(userId, job, analysis, [...byKey.values()], "LINKEDIN_PASTE", undefined, {
+    top: 50,
+    reserves: 50,
   });
+  return {
+    added: top.length + reserves.length,
+    alumni: top.filter((s) => s.candidate.isAlumni).length,
+    alreadyOnList: skippedExisting,
+    skipped,
+  };
 }
 
 async function classify(userId: string, analysis: JobAnalysis, candidates: Candidate[]): Promise<Map<string, Classification>> {
@@ -171,28 +298,41 @@ async function classify(userId: string, analysis: JobAnalysis, candidates: Candi
 
 type Ranked = { candidate: Candidate; score: Score; seniority: Classification["seniority"]; fn: Classification["function"]; isReserve: boolean };
 
-async function saveCandidates(userId: string, jobId: string, companyId: string, ranked: Ranked[], existingByUrl: Map<string, { id: string }>) {
+async function saveCandidates(
+  userId: string,
+  jobId: string,
+  companyId: string,
+  ranked: Ranked[],
+  existingByKey: Map<string, { id: string }>,
+  confidence: Confidence,
+) {
   if (!ranked.length) return;
-  const fresh = ranked.filter((r) => !existingByUrl.has(r.candidate.url));
+  const fresh = ranked.filter((r) => !existingByKey.has(r.candidate.url));
   const created = fresh.length
     ? await prisma.contact.createManyAndReturn({
         data: fresh.map(({ candidate: c, seniority, fn }) => ({
           userId,
           companyId,
           fullName: c.fullName,
-          linkedinUrl: c.url,
+          // Pasted text carries no profile link; "Open LinkedIn" then searches by name + company.
+          linkedinUrl: isPasted(c.url) ? null : c.url,
           headline: c.headline,
           currentTitle: c.currentTitle,
           location: c.location,
           seniority,
           function: fn,
-          source: "AI_SEARCH" as const,
-          confidence: "WEB_EVIDENCE" as const,
+          isConnected: c.isConnected ?? false,
+          source: confidence === "LINKEDIN_PASTE" ? ("PEOPLE_TAB_PASTE" as const) : ("AI_SEARCH" as const),
+          confidence,
           evidence: c.evidence,
         })),
       })
     : [];
-  const idByUrl = new Map<string, string>([...[...existingByUrl].map(([url, c]) => [url, c.id] as [string, string]), ...created.map((c) => [c.linkedinUrl!, c.id] as [string, string])]);
+  // createManyAndReturn returns rows in insertion order.
+  const idByUrl = new Map<string, string>([
+    ...[...existingByKey].map(([key, c]) => [key, c.id] as [string, string]),
+    ...created.map((c, i) => [fresh[i]!.candidate.url, c.id] as [string, string]),
+  ]);
 
   const tags: { contactId: string; tag: RelationshipTag; source: "RULE" | "AI"; evidence?: string }[] = [];
   const educations: { contactId: string; institutionRaw: string }[] = [];

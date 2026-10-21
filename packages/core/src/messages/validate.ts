@@ -43,6 +43,21 @@ export function countWords(text: string): number {
   return text.trim().split(/\s+/).filter(Boolean).length;
 }
 
+/**
+ * True if a sentence ties the recipient to the sender's college ("you studied at PES too",
+ * "fellow PES student"). A sentence that only says where the sender studies is fine.
+ */
+export function claimsSharedCollege(body: string, collegeNames: string[]): boolean {
+  if (/\b(fellow|same (college|university)|alumn(us|a|i)|alums?)\b/i.test(body)) return true;
+  const names = collegeNames.map((n) => n.toLowerCase());
+  return body
+    .split(/(?<=[.!?\n])\s*/)
+    .some((sentence) => {
+      const s = sentence.toLowerCase();
+      return names.some((n) => s.includes(n)) && /\b(you|your|too|also|both)\b/.test(s);
+    });
+}
+
 export function validateMessage(
   body: string,
   opts: { contactFirstName: string; maxWords?: number; knownInstitutions?: string[]; allowedInstitution?: string | null },

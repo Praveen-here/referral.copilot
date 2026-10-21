@@ -86,7 +86,7 @@ describe("score", () => {
   it("explains itself", () => {
     const s = scoreCandidate({ ...base, isAlumni: true }, undefined, { school: "PES University" });
     expect(s.reasons).toContain("PES University alum");
-    expect(scoreCandidate({ ...base, seniority: "INTERN" }).warnings).toContain("Intern, usually can't refer");
+    expect(scoreCandidate({ ...base, seniority: "INTERN" }).warnings).toContain("Intern: can't refer");
   });
 
   it("caps recruiters in the top list", () => {
@@ -130,5 +130,38 @@ describe("titles and scoring guards", () => {
     const unrelatedAlum = scoreCandidate({ ...base, isAlumni: true, roleRelevance: 0, seniority: "DIRECTOR_PLUS", function: "OTHER", openToRefer: false }).score;
     expect(internAlum).toBeLessThan(engineer);
     expect(unrelatedAlum).toBeLessThan(engineer);
+  });
+});
+
+describe("real-world result formats (seen 2026-10-21)", () => {
+  const alaan = { companyNames: ["Alaan"], university: "PES University" };
+  const r = (title: string, snippet: string) => parseProfileResult({ title, snippet, url: "https://in.linkedin.com/in/x-1" })!;
+
+  it("accepts '@Company' and first-person 'at Company' headlines", () => {
+    expect(verifyCandidate(r("Asha K - Backend Engineer @ Alaan (YC23) | LinkedIn", "Building payments."), alaan).ok).toBe(true);
+    expect(verifyCandidate(r("Ravi M - Product | LinkedIn", "I'm a software engineer at Alaan (YC W23), the AI spend platform."), alaan).ok).toBe(true);
+  });
+
+  it("rejects past roles and students who only mention the school", () => {
+    expect(verifyCandidate(r("Kiran P - SDE | LinkedIn", "Previously worked at Alaan, now at Google."), alaan).ok).toBe(false);
+    expect(verifyCandidate(r("Meena S - Student | LinkedIn", "CSE Student @ PES University · Experience: Robotics Club · Education: PES University"), alaan).ok).toBe(false);
+  });
+
+  it("treats Graduate Engineer Trainees as full-time juniors, not interns", () => {
+    expect(heuristicSeniority("Graduate Engineer Trainee")).toBe("JUNIOR");
+    expect(heuristicSeniority("SDE-1")).toBe("JUNIOR");
+  });
+
+  it("ranks mid-level and junior engineers above seniors and directors", () => {
+    const base = {
+      isAlumni: true, roleRelevance: 1, function: "ENGINEERING" as const, domainOverlap: 0.5, alreadyConnected: false,
+      sameLocation: true, openToRefer: false, companyReferralBonus: false, recentlyContactedForOtherJob: false,
+      previouslyDeclined: false, confidence: "WEB_EVIDENCE" as const,
+    };
+    const s = (seniority: Parameters<typeof scoreCandidate>[0]["seniority"]) => scoreCandidate({ ...base, seniority }).sortKey;
+    expect(s("MID")).toBeGreaterThan(s("JUNIOR"));
+    expect(s("JUNIOR")).toBeGreaterThan(s("SENIOR"));
+    expect(s("SENIOR")).toBeGreaterThan(s("STAFF_PLUS"));
+    expect(s("STAFF_PLUS")).toBeGreaterThan(s("DIRECTOR_PLUS"));
   });
 });

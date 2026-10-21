@@ -20,6 +20,8 @@ const schema = z.object({
   // flash-lite measured 4–19s per call vs ~2s for flash with minimal thinking (2026-10-20).
   GEMINI_MODEL_FAST: z.string().default("gemini-3.5-flash"),
   GEMINI_MODEL_QUALITY: z.string().default("gemini-3.5-flash"),
+  // Tried in order when the main model's free quota runs out (quotas are per model).
+  GEMINI_MODEL_FALLBACKS: z.string().default("gemini-flash-lite-latest,gemini-3.5-flash-lite"),
   GROQ_MODEL: z.string().default("openai/gpt-oss-120b"),
   // People search: Serper (Google results) preferred, Tavily as an alternative.
   SERPER_API_KEY: z.string().optional(),

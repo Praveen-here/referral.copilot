@@ -146,3 +146,16 @@ describe("alumni matching", () => {
     expect(isSameInstitution(null, "PES University")).toBe(false);
   });
 });
+
+import { claimsSharedCollege } from "../src";
+
+describe("shared-college claims", () => {
+  const pes = ["PES University", "PESIT", "PESU"];
+  it("catches implied shared college for non-alumni", () => {
+    expect(claimsSharedCollege("Hi Ishita,\n\nI saw you studied at PES University too, I'm a current MCA student there.", pes)).toBe(true);
+    expect(claimsSharedCollege("Hi Ishita, fellow PES student here.", pes)).toBe(true);
+  });
+  it("allows the sender to say where they study", () => {
+    expect(claimsSharedCollege("Hi Ishita,\n\nI'm an MCA student at PES University. Would you be open to referring me?", pes)).toBe(false);
+  });
+});

@@ -60,12 +60,15 @@ export async function applyEvent(userId: string, outreachId: string, event: Outr
       if (reserve) await tx.outreach.update({ where: { id: reserve.id }, data: { isReserve: false } });
     }
 
+    // Quick canned replies for outcomes, unless an AI reply to their message is already drafted.
+    // (The referral request itself is AI-written on demand by the message card, outside this transaction.)
     const followUpDraft = DRAFT_AFTER_EVENT[event];
-    if (followUpDraft) await ensureDraft(tx, userId, outreach.id, followUpDraft);
+    if (followUpDraft && !(await tx.message.findFirst({ where: { outreachId, kind: "REPLY_RESPONSE", status: "DRAFT" } }))) {
+      await ensureDraft(tx, userId, outreach.id, followUpDraft);
+    }
 
     if (result.connectedNow) {
       await tx.contact.update({ where: { id: outreach.contactId }, data: { isConnected: true } });
-      await ensureDraft(tx, userId, outreach.id, "REFERRAL_REQUEST");
       // One LinkedIn connection covers every job: advance this person's other pending invites too.
       const others = await tx.outreach.findMany({
         where: { userId, contactId: outreach.contactId, state: "CONNECTION_SENT", id: { not: outreach.id } },
@@ -74,7 +77,6 @@ export async function applyEvent(userId: string, outreachId: string, event: Outr
         const r = transition(snapshotOf(other), "ACCEPTED");
         if (!r.ok) continue;
         await persistTransition(tx, other.id, other.version, snapshotOf(other), r.next, "ACCEPTED", { via: outreach.id });
-        await ensureDraft(tx, userId, other.id, "REFERRAL_REQUEST");
       }
     }
 
@@ -201,8 +203,4 @@ export async function ensureDraft(tx: Tx, userId: string, outreachId: string, te
   );
 
   return tx.message.create({ data: { outreachId, kind, body, factsUsed: { source: "template", template } } });
-}
-
-export async function getOrCreateDraft(userId: string, outreachId: string, template: TemplateKind) {
-  return prisma.$transaction((tx) => ensureDraft(tx, userId, outreachId, template));
 }

@@ -50,6 +50,18 @@ Format: **Decision** / Reason / Consequence. Newest last.
     LinkedIn reportedly allows ~100/week; the user chose the full weekly ceiling.
     Stale-invite (21 days) withdraw suggestions matter more because there is no safety margin.
 
+14. **Rank by who actually refers a fresher, not by seniority.** (research 2026-10-21: Blind, Taro, forums, career guides; anecdotal)
+    Mid-level ICs ~1–3 years in refer most and stay responsive; early-career engineers refer readily (often bonus-driven) once past ~90-day probation; seniors/staff refer selectively (reputation); directors rarely submit referrals; most recruiters can't submit internal referrals but can route; alumni reply more (one tracked sample 43% vs 34%).
+    `SENIORITY_FIT`: MID 1.0, JUNIOR 0.9, SENIOR 0.8, MANAGER 0.6, STAFF 0.5, DIRECTOR 0.2, INTERN 0.1; ≤2 recruiters in the top list, labelled "can't refer, but can route you". Graduate Engineer Trainee = full-time junior, not intern.
+
+15. **Alumni recall: more web queries, but LinkedIn's own People filter is the real fix (user paste).**
+    Diagnosis on a small company (Alaan): Google returned 18 PES-mentioning profiles, none at the company; verification correctly rejected them all. For small companies alumni are scarce or not public.
+    Discovery reports `alumniFound`; zero shows a "Check on LinkedIn" card. Paste supports three sources; "filtered for my college" marks everyone alum, so it's opt-in, never the default.
+
+16. **AI-written messages: generated on demand outside DB transactions; facts-only; code-checked; template fallback.**
+    Generation takes 2–5 s, so it can't hold a transaction. The model invented a job detail ("6-month internship") and a false shared college in testing.
+    Prompt forbids job details not in facts; `claimsSharedCollege` + greeting/job-ID/"sender is a student" checks with one corrective retry; failed rewrites keep the user's draft. Gemini tries a model list on 429 (per-model free quotas) before Groq.
+
 13. **Host web + API as one Render free service, kept awake by Better Stack hitting `/healthz`.**
     Render's 750 free instance-hours are shared per workspace; two always-on services would need ~1,490 h. The health route avoids the DB so Neon can still scale to zero.
     One container, one port exposed; API moved to `API_PORT`. If memory runs short, upgrade the instance rather than split services.

@@ -25,7 +25,7 @@ export interface Person {
     isConnected: boolean;
     source: string;
   };
-  draft: { id: string; kind: string; body: string } | null;
+  draft: { id: string; kind: string; body: string; source?: string } | null;
   job?: { id: string; title: string; companyId: string; companyName: string };
 }
 

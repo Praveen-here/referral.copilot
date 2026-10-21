@@ -36,25 +36,29 @@ export const DEFAULT_WEIGHTS = {
 } as const;
 export type Weights = { [K in keyof typeof DEFAULT_WEIGHTS]: number };
 
-// Research (plan §9.2): mid-level engineers refer most; very senior people reply least; interns can't refer.
+// Who actually refers a fresher (research 2026-10-21, docs/DECISIONS.md #14): mid-level
+// ICs (~1–3 years in) refer most and still remember their own job hunt; juniors refer
+// readily (often bonus-driven) once past probation; seniors and staff refer selectively
+// because their name is on it; directors rarely submit referrals; interns can't.
 export const SENIORITY_FIT: Record<Seniority, number> = {
   MID: 1,
-  SENIOR: 1,
-  JUNIOR: 0.7,
-  STAFF_PLUS: 0.7,
-  MANAGER: 0.7,
-  DIRECTOR_PLUS: 0.3,
+  JUNIOR: 0.9,
+  SENIOR: 0.8,
+  MANAGER: 0.6,
+  STAFF_PLUS: 0.5,
+  DIRECTOR_PLUS: 0.2,
   INTERN: 0.1,
-  UNKNOWN: 0.5,
+  UNKNOWN: 0.6,
 };
 
 const SENIORITY_LABEL: Partial<Record<Seniority, string>> = {
-  MID: "Right seniority to refer",
-  SENIOR: "Senior engineer",
-  STAFF_PLUS: "Very senior, may reply less",
-  MANAGER: "Manager",
-  DIRECTOR_PLUS: "Director level, replies are rare",
-  INTERN: "Intern, usually can't refer",
+  MID: "Mid-level: most likely to refer",
+  JUNIOR: "Early-career: usually happy to refer",
+  SENIOR: "Senior: refers selectively",
+  STAFF_PLUS: "Very senior: replies less often",
+  MANAGER: "Manager: busy, but can push directly",
+  DIRECTOR_PLUS: "Director level: rarely refers",
+  INTERN: "Intern: can't refer",
 };
 
 export interface Score {
@@ -100,11 +104,11 @@ export function scoreCandidate(f: Features, w: Weights = DEFAULT_WEIGHTS, extra:
   const reasons: string[] = [];
   const warnings: string[] = [];
   if (f.isAlumni) reasons.push(extra.school ? `${extra.school} alum` : "Same college");
-  if (isRecruiter) reasons.push("Recruiter: can route you to the hiring team");
+  if (isRecruiter) reasons.push("Recruiter: can't refer, but can route you");
   else if (f.roleRelevance >= 1) reasons.push("Works in the same area as the role");
   else if (f.roleRelevance >= 0.5) reasons.push("Works in a related area");
   const label = SENIORITY_LABEL[f.seniority];
-  if (label && !isRecruiter) (SENIORITY_FIT[f.seniority] >= 0.7 ? reasons : warnings).push(label);
+  if (label && !isRecruiter) (SENIORITY_FIT[f.seniority] >= 0.8 ? reasons : warnings).push(label);
   if (f.alreadyConnected) reasons.push("Already connected");
   if (f.sameLocation) reasons.push("Same city");
   if (f.openToRefer) reasons.push("Says they're open to referrals");
@@ -115,7 +119,7 @@ export function scoreCandidate(f: Features, w: Weights = DEFAULT_WEIGHTS, extra:
 }
 
 /** Top N (max `maxRecruiters` recruiters) plus reserves, best first. */
-export function selectTop<T extends { score: Score }>(items: T[], opts = { top: 15, reserves: 10, maxRecruiters: 3 }) {
+export function selectTop<T extends { score: Score }>(items: T[], opts = { top: 15, reserves: 10, maxRecruiters: 2 }) {
   const sorted = [...items].sort((a, b) => b.score.sortKey - a.score.sortKey);
   const top: T[] = [];
   const rest: T[] = [];
@@ -134,6 +138,8 @@ export function selectTop<T extends { score: Score }>(items: T[], opts = { top: 
 
 export function heuristicSeniority(title: string): Seniority {
   const t = title.toLowerCase();
+  // "Graduate Engineer Trainee" is a full-time fresher role in India, not an internship.
+  if (/\bgraduate (engineer(ing)? )?trainee\b/.test(t)) return "JUNIOR";
   if (/\bintern(ship)?\b|\btrainee\b/.test(t)) return "INTERN";
   if (/\b(director|vp|vice president|head of|chief|cto|ceo)\b/.test(t)) return "DIRECTOR_PLUS";
   if (/\b(manager|mgr)\b/.test(t) && !/product manager|program manager/.test(t)) return "MANAGER";

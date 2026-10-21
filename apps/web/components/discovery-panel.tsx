@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "motion/react";
-import { Check, KeyRound, RefreshCw, Search, Sparkles } from "lucide-react";
+import { Check, ClipboardPaste, GraduationCap, KeyRound, RefreshCw, Search, Sparkles } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { api, ApiError } from "@/lib/api";
 import { cn } from "@/lib/cn";
@@ -12,7 +12,14 @@ import { Button, Spinner, spring } from "./ui";
 interface Run {
   id: string;
   status: "RUNNING" | "DONE" | "FAILED";
-  progress: { step: string; added?: number; reserves?: number; rejections?: Record<string, number> } | null;
+  progress: {
+    step: string;
+    added?: number;
+    reserves?: number;
+    alumniFound?: number;
+    university?: string | null;
+    rejections?: Record<string, number>;
+  } | null;
   candidatesFound: number;
   candidatesVerified: number;
   error: string | null;
@@ -44,7 +51,18 @@ export function useStartDiscovery(jobId: string) {
   });
 }
 
-export function DiscoveryPanel({ jobId, hasPeople }: { jobId: string; hasPeople: boolean }) {
+export function DiscoveryPanel({
+  jobId,
+  hasPeople,
+  companyName,
+  onPaste,
+}: {
+  jobId: string;
+  hasPeople: boolean;
+  companyName: string;
+  /** Opens the "Add people from LinkedIn" sheet. */
+  onPaste: () => void;
+}) {
   const { data } = useDiscovery(jobId);
   const start = useStartDiscovery(jobId);
   const refresh = useRefreshPipeline();
@@ -137,17 +155,39 @@ export function DiscoveryPanel({ jobId, hasPeople }: { jobId: string; hasPeople:
   }
 
   const added = run.progress?.added ?? 0;
+  const alumni = run.progress?.alumniFound;
+  const college = run.progress?.university;
   return (
     <AnimatePresence>
-      <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} transition={spring} className="flex flex-wrap items-center justify-between gap-3 px-1">
-        <p className="text-caption text-ink-3">
-          {added > 0
-            ? `Found ${added} people${run.progress?.reserves ? ` (+${run.progress.reserves} in reserve)` : ""} from ${run.candidatesFound} search results · ${new Date(run.createdAt).toLocaleDateString()}`
-            : `No new people found in ${run.candidatesFound} search results. Try adding the job description or a different company name.`}
-        </p>
-        <Button size="sm" variant="ghost" icon={<RefreshCw size={13} />} onClick={() => start.mutate()} loading={start.isPending}>
-          Search again
-        </Button>
+      <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} transition={spring} className="flex flex-col gap-3">
+        {college && alumni === 0 && (
+          <Card>
+            <div className="flex flex-wrap items-center gap-4">
+              <Icon tone="blue">
+                <GraduationCap size={18} />
+              </Icon>
+              <div className="min-w-0 flex-1">
+                <p className="text-headline">No {college} alumni found in web search</p>
+                <p className="text-ink-2">
+                  Either there are very few at {companyName}, or their profiles don&apos;t show it publicly. LinkedIn&apos;s own People filter is the most accurate way to check.
+                </p>
+              </div>
+              <Button variant="primary" icon={<ClipboardPaste size={15} />} onClick={onPaste}>
+                Check on LinkedIn
+              </Button>
+            </div>
+          </Card>
+        )}
+        <div className="flex flex-wrap items-center justify-between gap-3 px-1">
+          <p className="text-caption text-ink-3">
+            {added > 0
+              ? `Found ${added} people${alumni ? ` · ${alumni} alumni` : ""}${run.progress?.reserves ? ` (+${run.progress.reserves} in reserve)` : ""} from ${run.candidatesFound} search results · ${new Date(run.createdAt).toLocaleDateString()}`
+              : `No new people found in ${run.candidatesFound} search results. Try adding from LinkedIn, the job description, or a different company name.`}
+          </p>
+          <Button size="sm" variant="ghost" icon={<RefreshCw size={13} />} onClick={() => start.mutate()} loading={start.isPending}>
+            Search again
+          </Button>
+        </div>
       </motion.div>
     </AnimatePresence>
   );

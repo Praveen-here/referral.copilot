@@ -109,7 +109,7 @@ export async function ensureAnalysis(userId: string, jobId: string): Promise<Job
     );
     // The user's own inputs win over the model's reading of them, and interns
     // can't refer, so they're never a target even if the model lists them.
-    const titles = data.recommendedContactTitles.filter((t) => !/\b(intern|internship|trainee|apprentice)\b/i.test(t));
+    const titles = data.recommendedContactTitles.filter((t) => !/\b(intern|internship|apprentice)\b/i.test(t));
     analysis = {
       ...data,
       company: job.company.name,

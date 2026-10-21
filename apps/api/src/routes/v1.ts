@@ -4,10 +4,12 @@ import { OUTREACH_EVENTS, stripDashes, tabForState } from "@rc/core";
 import { prisma, Prisma } from "@rc/db";
 import { env } from "../env";
 import { HttpError, notFound } from "../http/errors";
-import { latestDiscovery, startDiscovery } from "../services/discovery";
+import { addPastedPeople, latestDiscovery, startDiscovery } from "../services/discovery";
 import { ensureAnalysis, readJobPosting } from "../services/jobs";
+import { generateDraft, getOrWriteDraft } from "../services/messages";
+import { readReply } from "../services/replies";
 import { searchConfigured } from "../services/search";
-import { applyEvent, getOrCreateDraft, undoLastEvent } from "../services/outreach";
+import { applyEvent, undoLastEvent } from "../services/outreach";
 import { addPersonToJob, findOrCreateCompany } from "../services/people";
 import { createSampleData, removeSampleData } from "../services/sample";
 import { companyDetail, inviteBudget, jobDetail, sidebar, today } from "../services/views";
@@ -159,6 +161,14 @@ v1.post("/jobs/:id/discover", async (req, res) => {
   res.status(202).json(await startDiscovery(res.locals.userId, id(req.params.id)));
 });
 
+/** People the user copied from a LinkedIn page (they open LinkedIn themselves; we never fetch it). */
+v1.post("/jobs/:id/paste-people", async (req, res) => {
+  const body = z
+    .object({ text: z.string().trim().min(20).max(50_000), source: z.enum(["COMPANY_PEOPLE", "COMPANY_PEOPLE_COLLEGE", "SEARCH"]) })
+    .parse(req.body);
+  res.json(await addPastedPeople(res.locals.userId, id(req.params.id), body.text, body.source));
+});
+
 v1.get("/jobs/:id/discovery", async (req, res) => {
   res.json({ run: await latestDiscovery(res.locals.userId, id(req.params.id)), searchConfigured: searchConfigured() });
 });
@@ -222,11 +232,18 @@ v1.post("/outreach/:id/undo", async (req, res) => {
   res.json(await undoLastEvent(res.locals.userId, id(req.params.id)));
 });
 
+const draftKind = z.enum(["REFERRAL_REQUEST", "FOLLOW_UP_1", "FOLLOW_UP_2", "RESUME_SHARE", "THANK_YOU", "THANKS_ANYWAY", "REPLY_RESPONSE"]);
+
+/** Returns the open draft of this kind, AI-writing one if needed (template if the AI is down). */
 v1.post("/outreach/:id/drafts", async (req, res) => {
-  const { template } = z
-    .object({ template: z.enum(["REFERRAL_REQUEST", "FOLLOW_UP_1", "FOLLOW_UP_2", "RESUME_SHARE", "THANK_YOU", "THANKS_ANYWAY"]) })
-    .parse(req.body);
-  res.json(await getOrCreateDraft(res.locals.userId, id(req.params.id), template));
+  const { template } = z.object({ template: draftKind }).parse(req.body);
+  res.json(await getOrWriteDraft(res.locals.userId, id(req.params.id), template));
+});
+
+/** User pasted the person's LinkedIn reply: read it, suggest the status, draft an answer. */
+v1.post("/outreach/:id/reply", async (req, res) => {
+  const { text } = z.object({ text: z.string().trim().min(1).max(4000) }).parse(req.body);
+  res.json(await readReply(res.locals.userId, id(req.params.id), text));
 });
 
 v1.patch("/messages/:id", async (req, res) => {
@@ -242,6 +259,19 @@ async function findDraft(userId: string, messageId: string) {
   if (!message) throw notFound("Draft");
   return message;
 }
+
+/** Rewrite a draft with the AI, optionally in a different style. */
+v1.post("/messages/:id/rewrite", async (req, res) => {
+  const { style } = z.object({ style: z.enum(["default", "shorter", "warmer", "formal", "fresh"]).default("fresh") }).parse(req.body);
+  const message = await findDraft(res.locals.userId, id(req.params.id));
+  const kind = message.kind === "FOLLOW_UP" ? ((message.factsUsed as { goal?: string } | null)?.goal === "FOLLOW_UP_2" ? "FOLLOW_UP_2" : "FOLLOW_UP_1") : message.kind;
+  if (kind === "INBOUND_REPLY" || kind === "CONNECTION_NOTE") throw new HttpError(400, "VALIDATION", "This message can't be rewritten");
+  const theirReply =
+    kind === "REPLY_RESPONSE"
+      ? (await prisma.message.findFirst({ where: { outreachId: message.outreachId, kind: "INBOUND_REPLY" }, orderBy: { createdAt: "desc" } }))?.body
+      : undefined;
+  res.json(await generateDraft(res.locals.userId, message.outreachId, kind, { style, theirReply, replaceMessageId: message.id }));
+});
 
 /** For messages that don't change pipeline state (thank-yous). */
 v1.post("/messages/:id/sent", async (req, res) => {

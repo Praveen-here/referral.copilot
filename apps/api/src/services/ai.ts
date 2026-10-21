@@ -2,9 +2,12 @@ import { geminiProvider, groqProvider, runTask, type AiTask, type LLMProvider } 
 import { prisma } from "@rc/db";
 import { env } from "../env";
 
+const geminiFallbacks = env.GEMINI_MODEL_FALLBACKS.split(",").map((m) => m.trim()).filter(Boolean);
+const geminiModels = (main: string) => [main, ...geminiFallbacks.filter((m) => m !== main)];
+
 const providers: LLMProvider[] = [
   ...(env.GEMINI_API_KEY
-    ? [geminiProvider({ apiKey: env.GEMINI_API_KEY, models: { fast: env.GEMINI_MODEL_FAST, quality: env.GEMINI_MODEL_QUALITY } })]
+    ? [geminiProvider({ apiKey: env.GEMINI_API_KEY, models: { fast: geminiModels(env.GEMINI_MODEL_FAST), quality: geminiModels(env.GEMINI_MODEL_QUALITY) } })]
     : []),
   ...(env.GROQ_API_KEY ? [groqProvider({ apiKey: env.GROQ_API_KEY, model: env.GROQ_MODEL })] : []),
 ];

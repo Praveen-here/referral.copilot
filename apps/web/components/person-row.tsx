@@ -11,7 +11,8 @@ import { openInNewTab, profileLink } from "@/lib/linkedin";
 import { useOutreachEvent, useRefreshPipeline } from "@/lib/queries";
 import type { Person } from "@/lib/types";
 import { useFeedback } from "./feedback";
-import { MessageCard } from "./message-card";
+import { MessageCard, type DraftKind } from "./message-card";
+import { ReplySheet } from "./reply-sheet";
 import { Avatar, Badge, Button, spring } from "./ui";
 
 const daysAgo = (iso: string | null) => {
@@ -31,18 +32,21 @@ const RESULT: Partial<Record<Person["state"], { label: string; tone: "green" | "
   STOPPED: { label: "Stopped", tone: "neutral" },
 };
 
-const OPTIONAL_DRAFTS = ["THANK_YOU", "THANKS_ANYWAY", "RESUME_SHARE"] as const;
+const OPTIONAL_DRAFTS = ["THANK_YOU", "THANKS_ANYWAY", "RESUME_SHARE", "REPLY_RESPONSE"] as const;
+const CONVERSING: Person["state"][] = ["AWAITING_REPLY", "IN_CONVERSATION"];
 
 /** Which draft this person needs right now, and what "sent" means for it. */
-function draftFor(p: Person): { template: TemplateKind; sentEvent: OutreachEvent | null; optional: boolean } | null {
+function draftFor(p: Person): { template: DraftKind; sentEvent: OutreachEvent | null; optional: boolean } | null {
+  // A drafted answer to their reply comes first: it's the most recent thing to act on.
+  const kind = p.draft?.kind as (typeof OPTIONAL_DRAFTS)[number] | undefined;
+  if (kind && OPTIONAL_DRAFTS.includes(kind)) {
+    // Answers that keep the conversation going move it to "awaiting reply"; thank-yous don't change state.
+    const continues = (kind === "RESUME_SHARE" || kind === "REPLY_RESPONSE") && CONVERSING.includes(p.state);
+    return { template: kind, sentEvent: continues ? "MESSAGE_SENT" : null, optional: true };
+  }
   if (p.state === "ACCEPTED_MESSAGE_READY") return { template: "REFERRAL_REQUEST", sentEvent: "MESSAGE_SENT", optional: false };
   if (p.attention?.kind === "FOLLOWUP_DUE") {
     return { template: p.attention.followupNumber === 1 ? "FOLLOW_UP_1" : "FOLLOW_UP_2", sentEvent: "FOLLOWUP_SENT", optional: false };
-  }
-  const kind = p.draft?.kind as (typeof OPTIONAL_DRAFTS)[number] | undefined;
-  if (kind && OPTIONAL_DRAFTS.includes(kind)) {
-    // A resume reply moves the conversation forward; thank-yous don't change state.
-    return { template: kind, sentEvent: kind === "RESUME_SHARE" ? "MESSAGE_SENT" : null, optional: true };
   }
   return null;
 }
@@ -74,6 +78,7 @@ export function PersonRow({
   };
 
   const createDraft = (template: TemplateKind) => api(`/outreach/${person.id}/drafts`, { method: "POST", json: { template } }).then(refresh);
+  const [readingReply, setReadingReply] = useState(false);
 
   const result = RESULT[person.state];
   const compactActions = person.state === "ACCEPTED_MESSAGE_READY" || Boolean(result);
@@ -138,7 +143,17 @@ export function PersonRow({
             compactActions ? "ml-auto" : "w-full pl-12",
           )}
         >
-          <Actions person={person} first={first} busy={event.isPending} fire={fire} openProfile={openProfile} isSample={isSample} createDraft={createDraft} />
+          <Actions
+            person={person}
+            first={first}
+            busy={event.isPending}
+            fire={fire}
+            openProfile={openProfile}
+            isSample={isSample}
+            createDraft={createDraft}
+            pasteReply={() => setReadingReply(true)}
+          />
+          <ReplySheet person={person} open={readingReply} onClose={() => setReadingReply(false)} />
         </div>
       </div>
 
@@ -194,6 +209,7 @@ function Actions({
   openProfile,
   isSample,
   createDraft,
+  pasteReply,
 }: {
   person: Person;
   first: string;
@@ -202,6 +218,7 @@ function Actions({
   openProfile: (afterReturn?: AfterReturn) => void;
   isSample: boolean;
   createDraft: (t: TemplateKind) => void;
+  pasteReply: () => void;
 }) {
   const linkedIn = (after?: AfterReturn) => (
     <Button
@@ -267,6 +284,7 @@ function Actions({
           <Menu
             label="Replied?"
             items={[
+              { label: "Paste their reply…", onClick: pasteReply },
               { label: "Replied", onClick: () => fire("REPLIED") },
               { label: "Asked for my resume", onClick: () => fire("RESUME_REQUESTED") },
               { label: "Referred me 🎉", onClick: () => fire("REFERRED") },
@@ -286,6 +304,7 @@ function Actions({
           <Menu
             label="Update"
             items={[
+              { label: "Paste their reply…", onClick: pasteReply },
               { label: "Draft: send my resume", onClick: () => createDraft("RESUME_SHARE") },
               { label: "Referred me 🎉", onClick: () => fire("REFERRED") },
               { label: "Said no", onClick: () => fire("DECLINED") },

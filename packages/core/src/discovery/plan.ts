@@ -36,10 +36,14 @@ export function planQueries(input: PlanInput): PlannedQuery[] {
 
   const queries: PlannedQuery[] = [];
   if (input.university) {
-    const [school, altSchool] = institutionAliases(input.university);
+    // Alumni are the strongest lever, so they get the most searches (several spellings,
+    // both company names, with and without city) to maximize recall.
+    const [school, altSchool, shortSchool] = institutionAliases(input.university);
     queries.push(q("ALUMNI_ROLE", company, school!, mainTitle));
     if (altSchool) queries.push(q("ALUMNI_ROLE", company, altSchool, mainTitle));
     queries.push(q("ALUMNI_ANY", altCompany, school!));
+    queries.push(q("ALUMNI_ANY", company, school!, city));
+    if (shortSchool) queries.push(q("ALUMNI_ANY", company, shortSchool, "engineer"));
   }
   for (const title of titles.slice(0, 2)) queries.push(q("ROLE", company, title, city));
   queries.push(q("RECRUITER", company, "university recruiter", city));

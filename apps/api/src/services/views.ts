@@ -59,7 +59,14 @@ function serialize(row: OutreachRow, now: Date) {
       isConnected: row.contact.isConnected,
       source: row.contact.source,
     },
-    draft: row.messages[0] ? { id: row.messages[0].id, kind: row.messages[0].kind, body: row.messages[0].body } : null,
+    draft: row.messages[0]
+      ? {
+          id: row.messages[0].id,
+          kind: row.messages[0].kind,
+          body: row.messages[0].body,
+          source: (row.messages[0].factsUsed as { source?: string } | null)?.source ?? "template",
+        }
+      : null,
   };
 }
 
