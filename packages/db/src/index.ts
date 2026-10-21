@@ -6,8 +6,11 @@ export * from "../generated/client";
 const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
 
 function createClient() {
-  const connectionString = process.env.DATABASE_URL;
+  // Hosting dashboards keep quotes/whitespace pasted around a value; strip them so a
+  // copied `"postgresql://…"` doesn't turn into a garbled URL (seen on Render: P1000).
+  const connectionString = process.env.DATABASE_URL?.trim().replace(/^(['"])(.*)\1$/, "$2");
   if (!connectionString) throw new Error("DATABASE_URL is not set");
+  if (!/^postgres(ql)?:\/\//.test(connectionString)) throw new Error("DATABASE_URL must start with postgresql://");
   // pg already treats `require` as `verify-full`; saying so explicitly silences its upgrade warning.
   const url = connectionString.replace("sslmode=require", "sslmode=verify-full");
   return new PrismaClient({

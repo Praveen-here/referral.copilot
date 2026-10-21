@@ -8,5 +8,5 @@ export default defineConfig({
   schema: "prisma/schema.prisma",
   migrations: { path: "prisma/migrations" },
   // Migrations need a direct (non-pooled) connection.
-  datasource: { url: env("DIRECT_URL") },
+  datasource: { url: env("DIRECT_URL").trim().replace(/^(['"])(.*)\1$/, "$2") },
 });
