@@ -17,6 +17,10 @@ export const BANNED_PHRASES = [
   "as we discussed",
   "great to reconnect",
   "i came across your profile and was impressed",
+  "strong fit",
+  "perfect fit",
+  "ideal fit",
+  "ideal candidate",
 ] as const;
 
 export const WORD_LIMITS = {

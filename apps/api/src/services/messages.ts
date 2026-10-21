@@ -4,6 +4,7 @@
 import { writeMessageTask, type MessageGoal, type MessageStyle } from "@rc/ai";
 import {
   claimsSharedCollege,
+  companyJobId,
   countWords,
   firstName,
   institutionAliases,
@@ -85,6 +86,8 @@ async function writeDraft(
   const jobSkills = new Set([...(analysis.requiredSkills ?? []), ...(analysis.preferredSkills ?? [])].map((s) => s.toLowerCase()));
   const matchingSkills = (profile?.skills ?? []).filter((s) => jobSkills.has(s.toLowerCase())).slice(0, 4);
   const recipient = firstName(o.contact.fullName);
+  // Only the company's own job ID is worth quoting; a LinkedIn posting number isn't one.
+  const jobId = companyJobId(o.job);
 
   // Only stored, verified facts reach the model.
   const facts: Record<string, string> = {
@@ -92,7 +95,8 @@ async function writeDraft(
     ...(o.contact.currentTitle ? { recipientTitle: o.contact.currentTitle } : {}),
     company: o.job.company.name,
     role: o.job.title,
-    ...(o.job.externalJobId ? { jobId: o.job.externalJobId } : {}),
+    ...(jobId ? { jobId } : {}),
+    ...(o.job.location ? { jobLocation: o.job.location.split(",")[0]!.trim() } : {}),
     ...(o.job.url ? { jobLink: o.job.url } : {}),
     ...(isAlumni && college ? { sharedCollege: college } : {}),
     ...(college ? { yourCollege: college } : {}),
@@ -136,9 +140,11 @@ async function writeDraft(
     if (!isAlumni && claimsSharedCollege(body, college ? institutionAliases(college) : [])) {
       issues.push("Claims or implies the recipient studied at the same college, but they did not; remove that");
     }
-    if ((goal === "REFERRAL_REQUEST" || goal === "RECRUITER_INTRO") && o.job.externalJobId && !body.includes(o.job.externalJobId)) {
-      issues.push(`Must include the job ID ${o.job.externalJobId}`);
-    }
+    const firstAsk = goal === "REFERRAL_REQUEST" || goal === "RECRUITER_INTRO";
+    if (firstAsk && jobId && !body.includes(jobId)) issues.push(`Must include the job ID ${jobId}`);
+    if (firstAsk && !body.toLowerCase().includes(o.job.company.name.toLowerCase())) issues.push(`Must name the company (${o.job.company.name})`);
+    if (firstAsk && o.job.url && !body.includes(o.job.url)) issues.push("Must include the job link on its own line, introduced as 'Here's the job link:'");
+    if (!jobId && /\bjob\s*id\b/i.test(body)) issues.push("Don't mention a job ID; none is known. Use the job link instead");
     if (!new RegExp(`^(hi|hello|hey)\\s+${recipient}\\b`, "i").test(body)) issues.push(`Must start with "Hi ${recipient},"`);
     // The sender is a student; only the recipient can be the alum.
     if (/\b(as|we're|we are|i'm|i am)\s+(a\s+)?(fellow\s+)?(alumn(us|a|i)|alums?|graduates?)\b/i.test(body)) {
@@ -156,7 +162,7 @@ async function writeDraft(
         userId,
         writeMessageTask({ goal, facts, style: opts.style ?? "default", conversation, theirReply: opts.theirReply, avoidPhrases, mustFix, maxWords }),
       );
-      const candidate = stripDashes(data.body.trim());
+      const candidate = tidyLayout(stripDashes(data.body.trim()));
       const issues = check(candidate);
       if (issues.length === 0) body = candidate;
       else mustFix = issues;
@@ -176,7 +182,7 @@ async function writeDraft(
         contactFirstName: recipient,
         companyName: o.job.company.name,
         jobTitle: o.job.title,
-        jobId: o.job.externalJobId,
+        jobId,
         jobUrl: o.job.url,
         sharedInstitution: isAlumni ? college : null,
         userDegree: profile?.degree ?? null,
@@ -195,6 +201,15 @@ async function writeDraft(
   const existing = await prisma.message.findFirst({ where: { outreachId, kind: MESSAGE_KIND[kind], status: "DRAFT" } });
   if (existing) return prisma.message.update({ where: { id: existing.id }, data: { body, factsUsed, editedByUser: false } });
   return prisma.message.create({ data: { outreachId, kind: MESSAGE_KIND[kind], body, factsUsed } });
+}
+
+/** The job link and the sign-off always get their own paragraph, whatever the model did. */
+function tidyLayout(body: string) {
+  return body
+    .replace(/\s*(Here's the job link:)/i, "\n\n$1")
+    .replace(/\s*\n?\s*(Thanks,)\s*\n?\s*/i, "\n\n$1\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 }
 
 function ordinal(n: number) {

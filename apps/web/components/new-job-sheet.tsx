@@ -129,7 +129,9 @@ export function NewJobSheet({ open, onClose }: { open: boolean; onClose: () => v
           <Field label="Role">{(id) => <Input id={id} placeholder="Software Engineer Intern" value={form.title} onChange={set("title")} />}</Field>
         </div>
         <div className="grid grid-cols-2 gap-3">
-          <Field label="Job ID">{(id) => <Input id={id} placeholder="Optional" value={form.externalJobId} onChange={set("externalJobId")} />}</Field>
+          <Field label="Job ID" hint="Only from the company's application page">
+            {(id) => <Input id={id} placeholder="Optional" value={form.externalJobId} onChange={set("externalJobId")} />}
+          </Field>
           <Field label="Location">{(id) => <Input id={id} placeholder="Bengaluru" value={form.location} onChange={set("location")} />}</Field>
         </div>
         <Field label="Job description" hint="Helps the app look for people in the right team and skills.">

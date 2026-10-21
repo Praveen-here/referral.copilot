@@ -75,7 +75,7 @@ function referralRequest(f: FactSheet, seed: number): string {
     seed + 1,
   );
 
-  const link = f.jobUrl ? `\n\nHere's the posting: ${f.jobUrl}` : "";
+  const link = f.jobUrl ? `\n\nHere's the job link: ${f.jobUrl}` : "";
   return `${opener} ${role}\n\n${ask}${link}\n\nThanks,\n${f.signOffName}`;
 }
 

@@ -40,10 +40,8 @@ export async function readJobPosting(rawUrl: string): Promise<PostingDraft> {
   const host = url.hostname.toLowerCase();
   const segments = url.pathname.split("/").filter(Boolean);
 
-  if (host.endsWith("linkedin.com")) {
-    const id = url.searchParams.get("currentJobId") ?? segments[segments.indexOf("view") + 1]?.match(/(\d{6,})/)?.[1] ?? null;
-    return empty("linkedin", { externalJobId: id });
-  }
+  // LinkedIn's posting number isn't the company's job ID, so it's never used as one.
+  if (host.endsWith("linkedin.com")) return empty("linkedin");
 
   if (/(^|\.)greenhouse\.io$/.test(host)) {
     const jobsAt = segments.indexOf("jobs");

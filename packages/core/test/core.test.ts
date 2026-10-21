@@ -159,3 +159,19 @@ describe("shared-college claims", () => {
     expect(claimsSharedCollege("Hi Ishita,\n\nI'm an MCA student at PES University. Would you be open to referring me?", pes)).toBe(false);
   });
 });
+
+import { companyJobId, linkedinPostingId } from "../src";
+
+describe("job IDs safe to quote", () => {
+  it("doesn't treat a LinkedIn posting number as the company's job ID", () => {
+    expect(linkedinPostingId("https://www.linkedin.com/jobs/view/4471337817/")).toBe("4471337817");
+    expect(linkedinPostingId("https://www.linkedin.com/jobs/view/sde-intern-at-acme-4471337817")).toBe("4471337817");
+    expect(linkedinPostingId("https://www.linkedin.com/jobs/search/?currentJobId=4098765432")).toBe("4098765432");
+    expect(companyJobId({ externalJobId: "4471337817", url: "https://www.linkedin.com/jobs/view/4471337817/" })).toBeNull();
+  });
+  it("keeps real job IDs from the company's page", () => {
+    expect(companyJobId({ externalJobId: "R-12345", url: "https://www.linkedin.com/jobs/view/4471337817/" })).toBe("R-12345");
+    expect(companyJobId({ externalJobId: "8172508", url: "https://job-boards.greenhouse.io/stripe/jobs/8172508" })).toBe("8172508");
+    expect(companyJobId({ externalJobId: null, url: null })).toBeNull();
+  });
+});

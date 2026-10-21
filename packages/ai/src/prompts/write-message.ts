@@ -18,10 +18,23 @@ export const writtenMessageSchema = z.object({
 });
 
 const GOALS: Record<MessageGoal, string> = {
-  REFERRAL_REQUEST:
-    "First message after they accepted your connection request. 3–5 short sentences, under 100 words. Open with their first name and the real connection between you if one is listed (same college). Name the exact role and job ID. Give ONE concrete reason you fit, taken only from the facts. Ask once, plainly, whether they'd be open to referring you. Give an easy out. Offer your resume. If a job link is listed, put it on its own line.",
+  REFERRAL_REQUEST: [
+    "First message after they accepted your connection request. 60–90 words. Follow this shape (vary the wording a little, keep the order):",
+    "Hi <name>,",
+    "",
+    "Hope you're doing well! I'm a fellow <sharedCollege> student currently pursuing my <degree> [ONLY if sharedCollege is listed; otherwise: I'm currently pursuing my <degree> at <yourCollege>], and I came across the <role> opening at <company>[ in <jobLocation>].",
+    "[Only if jobId is listed, on its own line:] Job ID: <jobId>",
+    "",
+    "[Only if whyYouFit or yourSkillsThatMatchTheJob is listed: one short, modest line, e.g. 'It lines up well with my backend work in Java.'] Would you be open to referring me for this role? I'd be happy to share my resume.",
+    "",
+    "[Only if jobLink is listed:] Here's the job link: <jobLink>",
+    "",
+    "Thanks,",
+    "<signOffName>",
+    "Rules for this message: always name the company with the role ('the <role> opening at <company>'); never call any number a job ID unless jobId is listed; never invent coursework, projects or experience.",
+  ].join("\n"),
   RECRUITER_INTRO:
-    "First message to a recruiter after they accepted. Recruiters usually can't submit referrals, so don't ask for one. 2–4 sentences, under 80 words: say which role you applied/are applying to (with job ID), one concrete reason you fit, and ask whether your profile could be considered or who on the team you should speak to.",
+    "First message to a recruiter after they accepted. Recruiters usually can't submit referrals, so don't ask for one. Under 80 words: who you are, the exact role AND company name (job ID only if 'jobId' is listed), one concrete reason you fit if listed in the facts, then ask whether your profile could be considered or who on the team you should speak to. If 'jobLink' is listed, end with 'Here's the job link: <jobLink>'.",
   FOLLOW_UP_1:
     "A short, polite nudge on your earlier message. 1–2 sentences, under 45 words. No guilt, no repeating the whole ask; acknowledge they're busy.",
   FOLLOW_UP_2:
@@ -58,7 +71,7 @@ export function writeMessageTask(input: {
 }): AiTask<z.infer<typeof writtenMessageSchema>> {
   return {
     task: "WRITE_MESSAGE",
-    promptVersion: "write-message/v3",
+    promptVersion: "write-message/v5",
     tier: "quality",
     schema: writtenMessageSchema,
     maxOutputTokens: 1024,
@@ -72,8 +85,9 @@ export function writeMessageTask(input: {
         : "- The recipient did NOT study at the sender's college. Never say or imply they did (no 'too', 'also', 'fellow', 'same college'). The sender may say where they study, nothing more.",
       "- Start with 'Hi <recipientFirstName>,'. Use contractions (I'm, I'd, it's, you're).",
       "- Never use em dashes or en dashes. Use commas or periods.",
-      "- No 'I hope this message finds you well', 'I am reaching out', 'delve', 'leverage', 'passionate', 'esteemed', 'synergy', 'impressive profile', 'Dear', emojis, bullet points, hashtags, or more than one exclamation mark.",
+      "- A short warm opener like 'Hope you're doing well!' is fine. No 'I hope this message finds you well', 'I am reaching out', 'delve', 'leverage', 'passionate', 'esteemed', 'synergy', 'impressive profile', 'Dear', emojis, bullet points, hashtags, or more than one exclamation mark.",
       "- No flattery about their profile or career. One ask only.",
+      "- Sound modest and natural: 'I think it lines up with…', never 'makes me a strong/perfect/ideal fit' or 'I am confident'.",
       "- End with 'Thanks,' on its own line followed by the sign-off name from the facts (for THANK_YOU/THANKS_ANYWAY just the name is fine).",
       `Goal: ${GOALS[input.goal]}`,
       STYLES[input.style],
