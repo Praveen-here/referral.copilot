@@ -5,8 +5,7 @@ import { motion } from "motion/react";
 import { ArrowRight, Sparkles, Sun } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
-import { NewJobSheet } from "@/components/new-job-sheet";
+import { useShell } from "@/components/app-shell";
 import { PersonRow } from "@/components/person-row";
 import { Button, EmptyState, SectionHeader, Spinner, spring } from "@/components/ui";
 import { api } from "@/lib/api";
@@ -22,7 +21,7 @@ export default function TodayPage() {
   const { data: me } = useMe();
   const { data: today, isLoading } = useToday();
   const { data: companies } = useSidebar();
-  const [newJob, setNewJob] = useState(false);
+  const { openNewJob } = useShell();
 
   const sections: { title: string; hint: string; items: Person[] }[] = today
     ? [
@@ -37,7 +36,7 @@ export default function TodayPage() {
   const firstName = me?.user.name.split(" ")[0];
 
   return (
-    <div className="mx-auto max-w-3xl px-10 pt-14 pb-24">
+    <div className="mx-auto max-w-3xl px-4 pt-8 pb-16 sm:px-10 sm:pt-14 sm:pb-24">
       <motion.header initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={spring}>
         <p className="text-ink-3">{new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}</p>
         <h1 className="mt-1 text-display">
@@ -62,7 +61,7 @@ export default function TodayPage() {
             <section key={s.title}>
               <SectionHeader title={s.title} count={s.items.length} />
               <p className="-mt-1 mb-2 px-1 text-caption text-ink-3">{s.hint}</p>
-              <ul className="-mx-3 flex flex-col">
+              <ul className="-mx-3 flex flex-col divide-y divide-line sm:divide-y-0">
                 {s.items.map((p) => (
                   <PersonRow key={p.id} person={p} companyName={p.job?.companyName ?? ""} showJob />
                 ))}
@@ -78,7 +77,7 @@ export default function TodayPage() {
             body="Add an internship or job you want a referral for. The people most likely to refer you will show up here."
             action={
               <div className="flex flex-col items-center gap-3">
-                <Button variant="primary" onClick={() => setNewJob(true)}>
+                <Button variant="primary" onClick={openNewJob}>
                   Add your first job
                 </Button>
                 <SampleDataButton />
@@ -91,8 +90,6 @@ export default function TodayPage() {
           <EmptyState icon={<Sun size={20} />} title="All caught up" body="When someone accepts, replies, or needs a follow-up, it shows up here." />
         </div>
       )}
-
-      <NewJobSheet open={newJob} onClose={() => setNewJob(false)} />
     </div>
   );
 }
@@ -101,8 +98,8 @@ function BudgetBar({ sentToday, dailyCap, sentWeek, weeklyCap }: { sentToday: nu
   const left = Math.max(0, Math.min(dailyCap - sentToday, weeklyCap - sentWeek));
   const pct = Math.min(100, (sentToday / dailyCap) * 100);
   return (
-    <div className="mt-6 flex items-center gap-3">
-      <div className="h-1.5 w-40 overflow-hidden rounded-full bg-subtle">
+    <div className="mt-6 flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:gap-3">
+      <div className="h-1.5 w-full max-w-60 overflow-hidden rounded-full bg-subtle sm:w-40">
         <motion.div className="h-full rounded-full bg-accent" initial={{ width: 0 }} animate={{ width: `${pct}%` }} transition={spring} />
       </div>
       <span className="text-caption text-ink-3">

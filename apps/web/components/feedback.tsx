@@ -62,7 +62,8 @@ export function FeedbackProvider({ children }: { children: ReactNode }) {
   return (
     <FeedbackContext.Provider value={{ toast, askOnReturn }}>
       {children}
-      <div className="pointer-events-none fixed inset-x-0 bottom-5 z-[60] flex flex-col items-center gap-2 px-4">
+      {/* Above the phone tab bar; bottom corner on desktop. */}
+      <div className="pointer-events-none fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+5rem)] z-[60] flex flex-col items-center gap-2 px-4 md:bottom-5">
         <AnimatePresence>
           {prompt && (
             <motion.div
@@ -72,10 +73,10 @@ export function FeedbackProvider({ children }: { children: ReactNode }) {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 16, scale: 0.98 }}
               transition={spring}
-              className="pointer-events-auto flex items-center gap-4 rounded-card border border-line bg-canvas py-2.5 pr-2.5 pl-4 shadow-sheet"
+              className="pointer-events-auto flex w-full max-w-md flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-card border border-line bg-canvas py-2.5 pr-2.5 pl-4 shadow-sheet sm:w-auto sm:max-w-none"
             >
               <span className="text-headline">{prompt.question}</span>
-              <div className="flex gap-1.5">
+              <div className="ml-auto flex gap-1.5">
                 <Button size="sm" variant="ghost" onClick={() => setPrompt(null)}>
                   Not yet
                 </Button>

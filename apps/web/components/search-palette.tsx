@@ -95,7 +95,7 @@ export function SearchPalette({ open, onClose }: { open: boolean; onClose: () =>
   return (
     <AnimatePresence>
       {open && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center px-4 pt-[12vh]">
+        <div className="fixed inset-0 z-50 flex items-start justify-center px-3 pt-[calc(env(safe-area-inset-top)+0.75rem)] sm:px-4 sm:pt-[12vh]">
           <motion.div className="fixed inset-0 bg-black/20" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={spring} onClick={onClose} />
           <motion.div
             role="dialog"
@@ -115,12 +115,12 @@ export function SearchPalette({ open, onClose }: { open: boolean; onClose: () =>
                 onKeyDown={onKeyDown}
                 placeholder="Search people by name…"
                 aria-label="Search people by name"
-                className="h-14 w-full bg-transparent text-[0.9375rem] text-ink placeholder:text-ink-3 focus:outline-none"
+                className="h-14 w-full bg-transparent text-base text-ink placeholder:text-ink-3 focus:outline-none sm:text-[0.9375rem]"
               />
               {isFetching && <Spinner className="text-ink-3" />}
             </div>
 
-            <div className="max-h-[60vh] overflow-y-auto p-1.5">
+            <div className="max-h-[55dvh] overflow-y-auto p-1.5 sm:max-h-[60vh]">
               {!query ? (
                 <p className="px-3 py-6 text-center text-ink-3">Type a name, e.g. someone who just accepted your request on LinkedIn.</p>
               ) : results.length === 0 && !isFetching ? (
@@ -160,14 +160,14 @@ export function SearchPalette({ open, onClose }: { open: boolean; onClose: () =>
                       ) : (
                         <Badge tone={STATUS[r.state].tone}>{STATUS[r.state].label}</Badge>
                       )}
-                      {i === active && <CornerDownLeft size={14} className="shrink-0 text-ink-3" aria-hidden />}
+                      {i === active && <CornerDownLeft size={14} className="hidden shrink-0 text-ink-3 sm:block" aria-hidden />}
                     </li>
                   ))}
                 </ul>
               )}
             </div>
 
-            <div className="flex items-center gap-4 border-t border-line px-4 py-2 text-caption text-ink-3">
+            <div className="hidden items-center gap-4 border-t border-line px-4 py-2 text-caption text-ink-3 sm:flex">
               <span>↑↓ to move</span>
               <span>↵ to open</span>
               <span>esc to close</span>

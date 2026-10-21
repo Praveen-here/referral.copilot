@@ -119,7 +119,7 @@ export function MessageCard({
         onChange={(e) => setText(e.target.value)}
         onBlur={save}
         rows={3}
-        className="field-sizing-content block max-h-96 w-full resize-none bg-transparent px-4 py-2 text-[0.875rem] leading-relaxed text-ink focus:outline-none"
+        className="field-sizing-content block max-h-96 w-full resize-none bg-transparent px-4 py-2 text-base leading-relaxed sm:text-[0.875rem] text-ink focus:outline-none"
         aria-label={`${TITLES[template]} for ${person.contact.fullName}`}
       />
       <div className="flex flex-wrap items-center justify-end gap-1.5 border-t border-line px-3 py-2.5">

@@ -2,8 +2,10 @@
 
 import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { tabForState, transition, type OutreachEvent } from "@rc/core";
+import { useRouter } from "next/navigation";
 import { useFeedback } from "@/components/feedback";
 import { api, ApiError } from "./api";
+import { authClient } from "./auth-client";
 import type { Budget, JobDetail, Me, Person, SidebarCompany, Today } from "./types";
 
 export const keys = {
@@ -53,6 +55,17 @@ const DONE_LABEL: Partial<Record<OutreachEvent, string>> = {
   WRONG_PERSON: "Removed",
   REOPEN: "Reopened",
 };
+
+/** Signs out and returns to the login page (sidebar on desktop, profile page on phones). */
+export function useSignOut() {
+  const router = useRouter();
+  const qc = useQueryClient();
+  return () =>
+    authClient.signOut().then(() => {
+      qc.clear();
+      router.replace("/login");
+    });
+}
 
 export const OUTREACH_EVENT_KEY = ["outreach-event"] as const;
 

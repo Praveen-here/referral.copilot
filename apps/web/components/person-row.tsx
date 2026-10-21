@@ -76,6 +76,7 @@ export function PersonRow({
   const createDraft = (template: TemplateKind) => api(`/outreach/${person.id}/drafts`, { method: "POST", json: { template } }).then(refresh);
 
   const result = RESULT[person.state];
+  const compactActions = person.state === "ACCEPTED_MESSAGE_READY" || Boolean(result);
   // Connection and school details only matter while deciding whom to contact.
   const reasons = person.reasons.filter(
     (r) => !r.endsWith(" alum") && (person.tab === "to_connect" || (r !== "Already connected" && r !== "School unknown")),
@@ -92,7 +93,8 @@ export function PersonRow({
         highlighted ? "bg-accent-soft shadow-[inset_0_0_0_1px_rgba(0,113,227,0.25)]" : "hover:bg-[#fafafa]",
       )}
     >
-      <div className="flex items-start gap-3">
+      {/* Wraps on phones: the action buttons drop to their own line under the name. */}
+      <div className="flex flex-wrap items-start gap-x-3 gap-y-2.5 sm:flex-nowrap">
         <Avatar name={person.contact.fullName} size={36} />
 
         <div className="min-w-0 flex-1">
@@ -129,7 +131,13 @@ export function PersonRow({
           {meta && <p className="mt-0.5 text-caption text-ink-3">{meta}</p>}
         </div>
 
-        <div className="flex shrink-0 items-center gap-1.5 pt-0.5">
+        <div
+          className={cn(
+            "flex shrink-0 flex-wrap items-center gap-1.5 sm:w-auto sm:flex-nowrap sm:pt-0.5 sm:pl-0",
+            // A lone "⋯" or "Reopen" stays beside the name; full button sets get their own line on phones.
+            compactActions ? "ml-auto" : "w-full pl-12",
+          )}
+        >
           <Actions person={person} first={first} busy={event.isPending} fire={fire} openProfile={openProfile} isSample={isSample} createDraft={createDraft} />
         </div>
       </div>
@@ -144,7 +152,7 @@ export function PersonRow({
             transition={spring}
             className="overflow-hidden"
           >
-            <div className="pt-3 pl-12">
+            <div className="pt-3 sm:pl-12">
               <MessageCard
                 person={person}
                 template={draft.template}
@@ -312,19 +320,27 @@ function Menu({ items, label }: { items: MenuItem[]; label?: string }) {
     };
   }, [open]);
 
+  const [openLeft, setOpenLeft] = useState(true);
+  const toggle = () => {
+    // 220px ≈ menu width plus margin: open rightwards only if that fits on screen.
+    const rect = ref.current?.getBoundingClientRect();
+    if (rect) setOpenLeft(rect.left + 220 > window.innerWidth);
+    setOpen((v) => !v);
+  };
+
   const visible = items.filter(Boolean) as Exclude<MenuItem, false>[];
   return (
     <div ref={ref} className="relative">
       {label ? (
-        <Button size="sm" variant="primary" onClick={() => setOpen((v) => !v)} aria-expanded={open}>
+        <Button size="sm" variant="primary" onClick={toggle} aria-expanded={open}>
           {label}
         </Button>
       ) : (
         <button
           aria-label="More actions"
           aria-expanded={open}
-          onClick={() => setOpen((v) => !v)}
-          className="pressable flex size-7 items-center justify-center rounded-control text-ink-3 hover:bg-hover hover:text-ink"
+          onClick={toggle}
+          className="pressable flex size-9 items-center justify-center rounded-control text-ink-3 hover:bg-hover hover:text-ink sm:size-7"
         >
           <MoreHorizontal size={16} />
         </button>
@@ -336,8 +352,11 @@ function Menu({ items, label }: { items: MenuItem[]; label?: string }) {
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.96, y: -4 }}
             transition={{ ...spring, duration: 0.25 }}
-            style={{ transformOrigin: "top right" }}
-            className="absolute right-0 z-30 mt-1 min-w-52 rounded-card border border-line bg-canvas p-1 shadow-float"
+            // Opens towards whichever side has room (on phones the button may sit at either edge).
+            className={cn(
+              "absolute z-30 mt-1 min-w-52 rounded-card border border-line bg-canvas p-1 shadow-float",
+              openLeft ? "right-0 origin-top-right" : "left-0 origin-top-left",
+            )}
           >
             {visible.map((item) => (
               <MenuButton
@@ -362,7 +381,7 @@ function MenuButton({ children, onClick, danger }: { children: ReactNode; onClic
   return (
     <button
       onClick={onClick}
-      className={cn("flex w-full items-center rounded-[6px] px-2.5 py-1.5 text-left text-sm hover:bg-hover", danger ? "text-red" : "text-ink")}
+      className={cn("flex w-full items-center rounded-[6px] px-3 py-2.5 text-left text-[0.9375rem] hover:bg-hover sm:px-2.5 sm:py-1.5 sm:text-sm", danger ? "text-red" : "text-ink")}
     >
       {children}
     </button>

@@ -100,13 +100,13 @@ function Company() {
   const name = company.name.replace(" (sample)", "");
 
   return (
-    <div className="mx-auto max-w-4xl px-10 pt-12 pb-24">
-      <header className="flex items-start justify-between gap-6">
-        <div className="flex items-center gap-4">
-          <div className="flex size-12 items-center justify-center rounded-[12px] border border-line bg-subtle text-lg font-bold text-ink-2">{name[0]}</div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-display">{name}</h1>
+    <div className="mx-auto max-w-4xl px-4 pt-6 pb-16 sm:px-10 sm:pt-12 sm:pb-24">
+      <header className="flex items-start justify-between gap-3 sm:gap-6">
+        <div className="flex min-w-0 items-center gap-3 sm:gap-4">
+          <div className="flex size-11 shrink-0 items-center justify-center rounded-[12px] border border-line bg-subtle text-lg font-bold text-ink-2 sm:size-12">{name[0]}</div>
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+              <h1 className="text-display break-words">{name}</h1>
               {company.isSample && <Badge>Sample</Badge>}
             </div>
             <p className="mt-0.5 text-ink-2">
@@ -119,11 +119,13 @@ function Company() {
           size="sm"
           icon={<Trash2 size={14} />}
           loading={remove.isPending}
+          aria-label={company.isSample ? "Remove sample" : "Delete company"}
           onClick={() => {
             if (window.confirm(company.isSample ? "Remove the sample data?" : `Delete ${name} and everything tracked for it?`)) remove.mutate();
           }}
         >
-          {company.isSample ? "Remove sample" : "Delete"}
+          {/* Icon only on phones, where the title needs the width. */}
+          <span className="hidden sm:inline">{company.isSample ? "Remove sample" : "Delete"}</span>
         </Button>
       </header>
 

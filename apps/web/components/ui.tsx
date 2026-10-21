@@ -1,11 +1,26 @@
 "use client";
 
 import { motion } from "motion/react";
-import { forwardRef, useId, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type TextareaHTMLAttributes } from "react";
+import { forwardRef, useId, useSyncExternalStore, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type TextareaHTMLAttributes } from "react";
 import { cn } from "@/lib/cn";
 
 // Critically damped default spring (apple-design §4: damping 1.0, response ~0.35s).
 export const spring = { type: "spring", bounce: 0, duration: 0.35 } as const;
+
+const PHONE_QUERY = "(max-width: 639px)"; // Tailwind's `sm` breakpoint
+
+/** True below the `sm` breakpoint, for behavior CSS alone can't express (e.g. motion direction). */
+export function useIsPhone() {
+  return useSyncExternalStore(
+    (onChange) => {
+      const mq = window.matchMedia(PHONE_QUERY);
+      mq.addEventListener("change", onChange);
+      return () => mq.removeEventListener("change", onChange);
+    },
+    () => window.matchMedia(PHONE_QUERY).matches,
+    () => false,
+  );
+}
 
 type Variant = "primary" | "secondary" | "ghost" | "danger";
 
@@ -27,7 +42,8 @@ export const Button = forwardRef<
       className={cn(
         "pressable inline-flex shrink-0 select-none items-center justify-center gap-1.5 rounded-control font-medium whitespace-nowrap",
         "disabled:cursor-not-allowed disabled:opacity-45",
-        size === "sm" ? "h-7 px-2.5 text-[0.8125rem]" : "h-9 px-3.5 text-sm",
+        // Phones get larger tap targets; desktop keeps the compact sizes.
+        size === "sm" ? "h-9 px-3 text-sm sm:h-7 sm:px-2.5 sm:text-[0.8125rem]" : "h-11 px-4 text-[0.9375rem] sm:h-9 sm:px-3.5 sm:text-sm",
         variants[variant],
         className,
       )}
@@ -105,10 +121,11 @@ export function Field({ label, hint, error, children }: { label: string; hint?: 
 }
 
 const inputClass =
-  "w-full rounded-control border border-line-strong bg-canvas px-3 text-sm text-ink placeholder:text-ink-3 transition-colors hover:border-[rgba(0,0,0,0.22)] focus:border-accent focus:outline-none focus:ring-3 focus:ring-accent-soft";
+  // 16px on phones: iOS Safari zooms into any input smaller than that.
+  "w-full rounded-control border border-line-strong bg-canvas px-3 text-base sm:text-sm text-ink placeholder:text-ink-3 transition-colors hover:border-[rgba(0,0,0,0.22)] focus:border-accent focus:outline-none focus:ring-3 focus:ring-accent-soft";
 
 export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(function Input({ className, ...props }, ref) {
-  return <input ref={ref} className={cn(inputClass, "h-9", className)} {...props} />;
+  return <input ref={ref} className={cn(inputClass, "h-11 sm:h-9", className)} {...props} />;
 });
 
 export const Textarea = forwardRef<HTMLTextAreaElement, TextareaHTMLAttributes<HTMLTextAreaElement>>(function Textarea({ className, ...props }, ref) {
@@ -128,7 +145,7 @@ export function Segmented<T extends string>({
   layoutId: string;
 }) {
   return (
-    <div role="tablist" className="inline-flex max-w-full gap-0.5 overflow-x-auto rounded-[10px] bg-subtle p-0.5">
+    <div role="tablist" className="inline-flex max-w-full gap-0.5 overflow-x-auto rounded-[10px] bg-subtle p-0.5 [scrollbar-width:none]">
       {options.map((o) => {
         const active = o.value === value;
         return (
@@ -138,7 +155,7 @@ export function Segmented<T extends string>({
             aria-selected={active}
             onClick={() => onChange(o.value)}
             className={cn(
-              "pressable relative h-7 rounded-control px-3 text-[0.8125rem] font-medium whitespace-nowrap",
+              "pressable relative h-8 rounded-control px-3 text-[0.8125rem] font-medium whitespace-nowrap sm:h-7",
               active ? "text-ink" : "text-ink-2 hover:text-ink",
             )}
           >

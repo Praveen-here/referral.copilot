@@ -3,38 +3,23 @@
 import { motion } from "motion/react";
 import { CircleUserRound, LogOut, Plus, Search, Sun } from "lucide-react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useState, type ReactNode } from "react";
-import { authClient } from "@/lib/auth-client";
+import { usePathname } from "next/navigation";
+import type { ReactNode } from "react";
 import { cn } from "@/lib/cn";
-import { useMe, useSidebar } from "@/lib/queries";
-import { NewJobSheet } from "./new-job-sheet";
-import { SearchPalette } from "./search-palette";
+import { useMe, useSidebar, useSignOut } from "@/lib/queries";
+import { useShell } from "./app-shell";
 import { Avatar, Logo, spring } from "./ui";
 
+/** Desktop navigation; phones use MobileTabBar instead. */
 export function Sidebar() {
   const pathname = usePathname();
-  const router = useRouter();
+  const { openSearch, openNewJob } = useShell();
+  const signOut = useSignOut();
   const { data: companies } = useSidebar();
   const { data: me } = useMe();
-  const [newJob, setNewJob] = useState(false);
-  const [searching, setSearching] = useState(false);
-
-  // Ctrl/Cmd+K or "/" opens people search from anywhere.
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      const typing = e.target instanceof HTMLElement && (e.target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(e.target.tagName));
-      if ((e.key.toLowerCase() === "k" && (e.ctrlKey || e.metaKey)) || (e.key === "/" && !typing)) {
-        e.preventDefault();
-        setSearching(true);
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, []);
 
   return (
-    <aside className="flex h-full w-60 shrink-0 flex-col border-r border-line bg-sidebar">
+    <aside className="hidden h-full w-60 shrink-0 flex-col border-r border-line bg-sidebar md:flex">
       <div className="flex h-14 items-center gap-2.5 px-4">
         <Logo size={26} />
         <span className="text-headline">Referral Copilot</span>
@@ -42,7 +27,7 @@ export function Sidebar() {
 
       <nav className="flex flex-col gap-0.5 px-2">
         <button
-          onClick={() => setSearching(true)}
+          onClick={openSearch}
           className="pressable flex h-8 items-center gap-2.5 rounded-control px-2.5 text-left text-ink-2 hover:bg-pressed hover:text-ink"
         >
           <Search size={16} className="w-4 text-ink-2" />
@@ -80,7 +65,7 @@ export function Sidebar() {
         })}
         {companies && companies.length === 0 && <p className="px-2.5 py-1.5 text-caption text-ink-3">No active jobs yet</p>}
         <button
-          onClick={() => setNewJob(true)}
+          onClick={openNewJob}
           className="pressable mt-1 flex h-8 items-center gap-2.5 rounded-control px-2.5 text-left text-ink-2 hover:bg-pressed hover:text-ink"
         >
           <Plus size={16} className="text-ink-3" />
@@ -96,16 +81,13 @@ export function Sidebar() {
           <button
             aria-label="Sign out"
             title="Sign out"
-            onClick={() => authClient.signOut().then(() => router.replace("/login"))}
+            onClick={signOut}
             className="pressable rounded-[6px] p-1 text-ink-3 hover:bg-pressed hover:text-ink"
           >
             <LogOut size={14} />
           </button>
         </div>
       </div>
-
-      <NewJobSheet open={newJob} onClose={() => setNewJob(false)} />
-      <SearchPalette open={searching} onClose={() => setSearching(false)} />
     </aside>
   );
 }

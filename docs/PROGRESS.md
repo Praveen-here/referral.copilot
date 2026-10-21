@@ -11,6 +11,7 @@ Usable locally for real outreach. Not deployed. Discovery works against live Ser
 - Pipeline tabs with one-click statuses, undo, optimistic updates, "sent?" prompt on tab return
 - Template drafts: referral (alumni/general), follow-ups ×2, resume share, thank-you, thanks-anyway
 - Today page (computed reminders), invite budget bar, sample data, Ctrl+K people search with inline "Accepted"
+- Mobile layout: bottom tab bar (Today · Companies · + · Search · Profile), `/companies` list, bottom sheets, 16px inputs, safe areas
 - Logo and favicon; repo on GitHub (`Praveen-here/referral.copilot`, branch `main`)
 
 ## In progress

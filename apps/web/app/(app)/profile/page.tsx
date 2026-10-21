@@ -1,12 +1,12 @@
 "use client";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Check } from "lucide-react";
+import { Check, LogOut } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
 import { useFeedback } from "@/components/feedback";
 import { Button, Field, Input, Spinner } from "@/components/ui";
 import { api, ApiError } from "@/lib/api";
-import { keys, useMe } from "@/lib/queries";
+import { keys, useMe, useSignOut } from "@/lib/queries";
 
 interface Form {
   university: string;
@@ -23,6 +23,7 @@ interface Form {
 
 export default function ProfilePage() {
   const { data: me } = useMe();
+  const signOut = useSignOut();
   const qc = useQueryClient();
   const { toast } = useFeedback();
   const [form, setForm] = useState<Form | null>(null);
@@ -76,7 +77,7 @@ export default function ProfilePage() {
   };
 
   return (
-    <div className="mx-auto max-w-2xl px-10 pt-14 pb-24">
+    <div className="mx-auto max-w-2xl px-4 pt-8 pb-16 sm:px-10 sm:pt-14 sm:pb-24">
       <h1 className="text-display">Profile</h1>
       <p className="mt-2 text-[0.9375rem] text-ink-2">Used to spot alumni and personalize messages. Nothing here is ever made up or added to.</p>
 
@@ -110,20 +111,28 @@ export default function ProfilePage() {
           <Field label="Sign messages as">{(id) => <Input id={id} placeholder="Praveen" value={form.signOffName} onChange={set("signOffName")} />}</Field>
         </Group>
 
-        <div className="flex items-center justify-end gap-3 border-t border-line pt-6">
+        <div className="flex flex-wrap items-center justify-end gap-3 border-t border-line pt-6">
           {save.error && <p className="text-caption text-red">{save.error instanceof ApiError ? save.error.message : "Could not save"}</p>}
           <Button variant="primary" type="submit" icon={<Check size={15} />} loading={save.isPending} disabled={!form.university || !form.degree}>
             Save profile
           </Button>
         </div>
       </form>
+
+      {/* Phones have no sidebar, so account actions live here. */}
+      <div className="mt-10 flex items-center justify-between gap-3 border-t border-line pt-6 md:hidden">
+        <span className="min-w-0 truncate text-ink-2">{me?.user.email}</span>
+        <Button variant="danger" icon={<LogOut size={15} />} onClick={signOut}>
+          Sign out
+        </Button>
+      </div>
     </div>
   );
 }
 
 function Group({ title, description, children }: { title: string; description?: string; children: React.ReactNode }) {
   return (
-    <section className="grid grid-cols-[180px_1fr] gap-8">
+    <section className="grid grid-cols-1 gap-3 sm:grid-cols-[180px_1fr] sm:gap-8">
       <div>
         <h2 className="text-headline">{title}</h2>
         {description && <p className="mt-1 text-caption text-ink-3">{description}</p>}

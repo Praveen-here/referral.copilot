@@ -3,7 +3,7 @@
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { X } from "lucide-react";
 import { useEffect, type ReactNode } from "react";
-import { spring } from "./ui";
+import { spring, useIsPhone } from "./ui";
 
 /**
  * Modal sheet. A dimming scrim focuses the task (apple-design §12); the panel
@@ -25,6 +25,7 @@ export function Sheet({
   footer?: ReactNode;
 }) {
   const reduce = useReducedMotion();
+  const phone = useIsPhone();
 
   useEffect(() => {
     if (!open) return;
@@ -36,7 +37,8 @@ export function Sheet({
   return (
     <AnimatePresence>
       {open && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto px-4 pt-[10vh] pb-8">
+        // Phones: bottom sheet in thumb reach. Desktop: centered dialog.
+        <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-start sm:overflow-y-auto sm:px-4 sm:pt-[10vh] sm:pb-8">
           <motion.div
             className="fixed inset-0 bg-black/25"
             initial={{ opacity: 0 }}
@@ -49,13 +51,14 @@ export function Sheet({
             role="dialog"
             aria-modal="true"
             aria-label={title}
-            className="relative w-full max-w-lg rounded-sheet bg-canvas shadow-sheet"
-            initial={reduce ? { opacity: 0 } : { opacity: 0, scale: 0.96, y: 8 }}
+            className="relative flex max-h-[92dvh] w-full max-w-lg flex-col rounded-t-sheet bg-canvas pb-[env(safe-area-inset-bottom)] shadow-sheet sm:max-h-none sm:rounded-sheet sm:pb-0"
+            initial={reduce ? { opacity: 0 } : phone ? { y: "100%" } : { opacity: 0, scale: 0.96, y: 8 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={reduce ? { opacity: 0 } : { opacity: 0, scale: 0.96, y: 8 }}
+            exit={reduce ? { opacity: 0 } : phone ? { y: "100%" } : { opacity: 0, scale: 0.96, y: 8 }}
             transition={spring}
           >
-            <div className="flex items-start justify-between gap-4 px-6 pt-5">
+            <div aria-hidden className="mx-auto mt-2 h-1 w-9 shrink-0 rounded-full bg-line-strong sm:hidden" />
+            <div className="flex items-start justify-between gap-4 px-5 pt-3 sm:px-6 sm:pt-5">
               <div>
                 <h2 className="text-title">{title}</h2>
                 {description && <p className="mt-1 text-ink-2">{description}</p>}
@@ -64,8 +67,8 @@ export function Sheet({
                 <X size={18} />
               </button>
             </div>
-            <div className="px-6 py-5">{children}</div>
-            {footer && <div className="flex justify-end gap-2 border-t border-line px-6 py-4">{footer}</div>}
+            <div className="min-h-0 overflow-y-auto px-5 py-5 sm:px-6">{children}</div>
+            {footer && <div className="flex shrink-0 justify-end gap-2 border-t border-line px-5 py-3 sm:px-6 sm:py-4">{footer}</div>}
           </motion.div>
         </div>
       )}
