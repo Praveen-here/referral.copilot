@@ -1,0 +1,46 @@
+# Architecture
+
+## Shape
+```
+Browser ──▶ Next.js :3000 (UI) ──/api/* rewrite──▶ Express :4000 ──▶ Neon Postgres
+                                                     ├──▶ Gemini (fallback Groq)
+                                                     └──▶ Serper (Google search)
+```
+Modular monolith: one API process, no queue/worker, no Redis. Background work (discovery, analysis) runs in-process; reminders are computed from timestamps when a page loads.
+
+## Components
+| Component | Responsibility |
+|---|---|
+| `apps/web` | Client-rendered pages (`(app)/` = authed area: Today, company page, profile; `login/`). Data via TanStack Query with refetch-on-focus. Key UI units: `person-row` (per-stage one-click actions), `message-card` (draft + "Copy & open LinkedIn"), `discovery-panel`, `search-palette` (Ctrl+K), `feedback` (single undo toast + "did you send it?" prompt on tab return) |
+| `apps/api` routes | REST under `/api/v1`, Zod-validated, `requireUser` middleware sets `res.locals.userId`. Errors: `{error:{code,message,details,requestId}}` |
+| `services/outreach` | `applyEvent`: transition + optimistic-lock (`version`) + event log + auto-drafts; `undoLastEvent` (2 min window); reserve promotion |
+| `services/discovery` | Discovery run: analyze job → plan queries → search → verify → classify (AI) → score → save top 15 + 10 reserves. Progress on `discovery_run` row; UI polls |
+| `services/jobs` | Job posting reader (Greenhouse/Lever public APIs; LinkedIn URLs only parsed for job ID) and `ensureAnalysis` (AI, with rule fallback) |
+| `services/views` | Read models: sidebar, job detail, Today, invite budget |
+| `packages/core` | All decision logic (pure, unit-tested) |
+| `packages/ai` | `runTask`: JSON-schema output → Zod validate → one repair retry → next provider |
+
+## Data model (Prisma, `packages/db/prisma/schema.prisma`)
+- Auth tables owned by Better Auth: `user`, `session`, `account`, `verification`.
+- `user_profile` (degree, semester, skills, `projects[0].oneLiner` = fit reason used in messages, `settings` JSON: signOffName, invite caps, weights) + `education` (shared by user and contacts; alumni = school match).
+- `company` (per user) → `job_opportunity` (`analysis` JSON from AI) → `outreach` (one per contact×job; `state`, `nextCheckAt`, `rank`, `isReserve`, `matchScore`, `scoreBreakdown`, `version`).
+- `contact` (unique per user+LinkedIn URL; `evidence`, `confidence`), `contact_tag` (COLLEGE_ALUMNI, RECRUITER, …).
+- `outreach_event` (append-only log; payload.prev enables undo), `message` (DRAFT/SENT/DISCARDED), `discovery_run`, `ai_run` (every AI attempt logged).
+
+## Key flows
+- **Auth**: Google OAuth via Better Auth on Express at `/api/auth/*` (proxied, so cookies are first-party on :3000). Redirect URI `http://localhost:3000/api/auth/callback/google`. Session cookie cached 5 min to skip DB lookups. Web guards the `(app)` layout client-side.
+- **Pipeline**: DISCOVERED → CONNECTION_SENT → ACCEPTED_MESSAGE_READY → AWAITING_REPLY ⇄ IN_CONVERSATION → REFERRAL_RECEIVED / DECLINED / NO_RESPONSE (+ SKIPPED, WRONG_PERSON, DROPPED, JOB_CLOSED, STOPPED). Accepting creates the referral draft; outcomes create resume/thank-you drafts. Follow-up due at day 5, max 2. Checks at +3d (acceptance), +2d/+5d (reply).
+- **Discovery**: plain-keyword queries (alumni+role, alumni+company, role+city ×2, recruiters ×2, referral) → Serper → `parseProfileResult` reads Google's `Name - Title - Company | LinkedIn` + `Experience: · Education: · Location:` → `verifyCandidate` (current employer, former-employee and look-alike company rejection, school only from source) → AI classify seniority/function/relevance (rules fallback) → `scoreCandidate` (alumni 40, relevance 20, seniority 10, …; intern ×0.4, unrelated ×0.75) → `selectTop`.
+- **Messages**: currently deterministic templates (`core/messages/templates.ts`) fed only by stored facts; validator strips dashes and flags stock phrases/wrong names/unverified schools.
+
+## External services
+| Service | Use | Notes |
+|---|---|---|
+| Neon Postgres | All data | Pooled URL for app, direct URL for migrations; scale-to-zero |
+| Google OAuth | Sign-in | Testing mode, only test users can log in |
+| Gemini API | Job analysis, people classification | `gemini-3.5-flash`, thinking minimal/low; free tier |
+| Groq | Fallback LLM | `openai/gpt-oss-120b` |
+| Serper | People search | Free plan: no quotes/`site:`/`OR`, 10 results/query |
+
+## Deployment
+Target: one Render free web service running both processes (Next public on `$PORT`, Express internal on `API_PORT`, same `/api` rewrite as local). Better Stack monitors `/healthz` (no DB) to keep it awake. Neon stays separate. Setup steps → `docs/DEVELOPMENT.md`.

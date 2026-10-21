@@ -1,5 +1,7 @@
 # Referral Copilot: Implementation Plan
 
+> **Historical spec and research.** Partly superseded by what was built. For the current state read `CLAUDE.md` → `docs/ARCHITECTURE.md`, `docs/DECISIONS.md`, `docs/PROGRESS.md`. Use this file only for product intent and the research background (§9.2, §10.1, sources).
+
 Status: planning only, no code yet. Every decision below states **why**. When a decision changes, update this file before you change the code.
 
 Last updated: 2026-10-20

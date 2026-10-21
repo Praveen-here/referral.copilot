@@ -9,7 +9,8 @@
     "test": "pnpm -r test",
     "db:migrate": "pnpm --filter @rc/db migrate",
     "db:generate": "pnpm --filter @rc/db generate",
-    "db:studio": "pnpm --filter @rc/db studio"
+    "db:studio": "pnpm --filter @rc/db studio",
+    "start": "concurrently -k -n api,web \"npm --prefix apps/api run start\" \"npm --prefix apps/web run start\""
   },
   "devDependencies": {
     "concurrently": "^9.2.5"

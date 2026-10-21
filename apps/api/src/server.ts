@@ -28,6 +28,6 @@ app.get("/readyz", async (_req, res) => {
 app.use("/api/v1", requireUser, v1);
 app.use(errorHandler);
 
-app.listen(env.PORT, () => {
-  console.log(`API listening on http://localhost:${env.PORT}`);
+app.listen(env.API_PORT, () => {
+  console.log(`API listening on http://localhost:${env.API_PORT}`);
 });
