@@ -1,36 +1,36 @@
 # Progress
-_Last updated: 2026-10-21. Keep this file short; replace, don't append._
+_Last updated: 2026-10-23. Keep this file short; replace, don't append._
 
 ## Status
-Usable locally for real outreach. Not deployed. Discovery works against live Serper results; accuracy on real jobs not yet measured.
+Live at https://referral-copilot.onrender.com (Render, auto-deploys from `main`). Used for real outreach. Database = Neon `production` branch (fresh: earlier data on the deleted `dev` branch was lost 2026-10-21; user re-adding jobs).
 
 ## Done
-- Google login, profile (college, degree, semester, fit line, resume link)
-- Jobs: add by URL (Greenhouse/Lever auto-fill; LinkedIn job ID parsed) or manual; AI job analysis
-- Discovery: top 15 + 10 reserves with match score and reasons; wrong-person → reserve promotion
-- Pipeline tabs with one-click statuses, undo, optimistic updates, "sent?" prompt on tab return
-- AI-written drafts (Gemini → fallback models → Groq → template) with Rewrite (shorter/warmer/formal/fresh); recruiter-specific intro
-- Paste a reply: AI reads it, suggests the status, drafts the answer
-- LinkedIn page paste (company People page / filtered for college / search results), verified like web results
-- Research-based ranking (mid-level and early-career first); "no alumni found" guidance
-- Today page (computed reminders), invite budget bar, sample data, Ctrl+K people search with inline "Accepted"
-- Mobile layout: bottom tab bar (Today · Companies · + · Search · Profile), `/companies` list, bottom sheets, 16px inputs, safe areas
-- Logo and favicon; repo on GitHub (`Praveen-here/referral.copilot`, branch `main`)
+- Google login; profile (college, degree, semester, fit line, skills, resume link, sign-off)
+- Jobs: add by URL (Greenhouse/Lever auto-fill; LinkedIn → paste JD, no auto job ID) or manual; AI job analysis
+- Discovery: Serper plain-keyword queries (alumni-heavy) → verify → AI classify → research-based ranking → top 15 + 10 reserves; "no alumni found" card → LinkedIn paste
+- LinkedIn page paste (company People page / college-filtered / search results), verified, "1st" ⇒ connected
+- Pipeline tabs with one-click statuses, undo, optimistic updates, "sent?" prompt on tab return, reserve promotion
+- AI-written messages in the user's reference style (Gemini → fallback models → Groq → template), Rewrite (shorter/warmer/formal/fresh), recruiter intro
+- Paste a reply → outcome, suggested status, drafted answer
+- Today page, invite budget (15/day, 100/week), Ctrl+K people search with inline "Accepted", sample data
+- Mobile: bottom tab bar, `/companies`, bottom sheets, 16px inputs, safe areas; logo/favicon
+- Docs: CLAUDE.md + `docs/` (architecture, development, decisions, API, preferences, research, roadmap)
 
 ## In progress
-- Deploying to Render (single service) + Better Stack uptime monitor
-- Accuracy check: run discovery on 3–5 real jobs, target ≥12/15 correct, tune queries/weights from user feedback
+- Accuracy check on real jobs (target ≥12/15 correct); tune from user feedback
+- Better Stack uptime monitor on `/healthz` (unverified whether set up)
 
 ## Known issues
 - Undoing WRONG_PERSON/SKIP doesn't demote the reserve that was promoted
 - Closing a job sets JOB_CLOSED via bulk update without event rows
-- Discovery runs in-process: a server restart mid-run leaves it RUNNING for up to 5 min before retry is allowed
-- Company careers pages that embed Greenhouse via `?gh_jid=` aren't auto-read
-- Serper key was exposed in a chat log on 2026-10-20; confirm it was rotated (unverified)
+- Discovery runs in-process: a restart mid-run leaves it RUNNING up to 5 min
+- Careers pages embedding Greenhouse via `?gh_jid=` aren't auto-read
+- Existing drafts keep old wording until the user clicks Rewrite
+- Gemini free tier: main model's daily quota can run out (fallback models/Groq cover it)
+- Serper key exposed in chat 2026-10-20; rotation unverified
 
-## Next (plan order)
-1. Tune discovery from real-job feedback (LinkedIn paste now available for alumni)
-2. Fix small known issues above
-3. Data export / account delete, settings page (caps, weights)
-4. Analytics (acceptance/reply/referral rates, alumni vs non-alumni)
-5. E2E tests in repo, Sentry, deployment
+## Next
+1. Early-posting monitor + "posted X ago" genuineness badge (`docs/ROADMAP.md`, from `docs/research/job-search-research.md`)
+2. Warm-up step / founder targeting / "ping the hiring manager" line (ROADMAP)
+3. Fix known issues; periodic DB export
+4. Settings page, data export/delete, analytics

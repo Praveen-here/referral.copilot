@@ -15,7 +15,10 @@ Modular monolith: one API process, no queue/worker, no Redis. Background work (d
 | `apps/api` routes | REST under `/api/v1`, Zod-validated, `requireUser` middleware sets `res.locals.userId`. Errors: `{error:{code,message,details,requestId}}` |
 | `services/outreach` | `applyEvent`: transition + optimistic-lock (`version`) + event log + auto-drafts; `undoLastEvent` (2 min window); reserve promotion |
 | `services/discovery` | Discovery run: analyze job → plan queries → search → verify → classify (AI) → score → save top 15 + 10 reserves. Progress on `discovery_run` row; UI polls |
-| `services/jobs` | Job posting reader (Greenhouse/Lever public APIs; LinkedIn URLs only parsed for job ID) and `ensureAnalysis` (AI, with rule fallback) |
+| `services/jobs` | Job posting reader (Greenhouse/Lever public APIs; LinkedIn URLs → "paste the JD", never fetched) and `ensureAnalysis` (AI, with rule fallback) |
+| `services/messages` | `generateDraft`: facts → Gemini writes → code checks → one corrective retry → template fallback; Rewrite styles; in-flight dedupe |
+| `services/replies` | `readReply`: AI classifies a pasted reply → suggested event + outcome-specific draft (thank-you / resume / answer) |
+| `services/discovery` (paste) | `addPastedPeople`: AI extracts people from a copied LinkedIn page, every value must appear verbatim, then the same verify/rank/save as web results |
 | `services/views` | Read models: sidebar, job detail, Today, invite budget |
 | `packages/core` | All decision logic (pure, unit-tested) |
 | `packages/ai` | `runTask`: JSON-schema output → Zod validate → one repair retry → next provider |
@@ -31,16 +34,18 @@ Modular monolith: one API process, no queue/worker, no Redis. Background work (d
 - **Auth**: Google OAuth via Better Auth on Express at `/api/auth/*` (proxied, so cookies are first-party on :3000). Redirect URI `http://localhost:3000/api/auth/callback/google`. Session cookie cached 5 min to skip DB lookups. Web guards the `(app)` layout client-side.
 - **Pipeline**: DISCOVERED → CONNECTION_SENT → ACCEPTED_MESSAGE_READY → AWAITING_REPLY ⇄ IN_CONVERSATION → REFERRAL_RECEIVED / DECLINED / NO_RESPONSE (+ SKIPPED, WRONG_PERSON, DROPPED, JOB_CLOSED, STOPPED). Accepting creates the referral draft; outcomes create resume/thank-you drafts. Follow-up due at day 5, max 2. Checks at +3d (acceptance), +2d/+5d (reply).
 - **Discovery**: plain-keyword queries (alumni+role, alumni+company, role+city ×2, recruiters ×2, referral) → Serper → `parseProfileResult` reads Google's `Name - Title - Company | LinkedIn` + `Experience: · Education: · Location:` → `verifyCandidate` (current employer, former-employee and look-alike company rejection, school only from source) → AI classify seniority/function/relevance (rules fallback) → `scoreCandidate` (alumni 40, relevance 20, seniority 10, …; intern ×0.4, unrelated ×0.75) → `selectTop`.
-- **Messages**: currently deterministic templates (`core/messages/templates.ts`) fed only by stored facts; validator strips dashes and flags stock phrases/wrong names/unverified schools.
+- **Messages**: the message card asks `/outreach/:id/drafts`; the server AI-writes from a facts-only sheet (recipient, role, company, city, real job ID via `companyJobId`, link, shared college only if tagged, user's degree/semester/fit line/matching skills/resume) using the user's preferred shape (`docs/PREFERENCES.md`). Checks: no dashes/stock phrases/boasting, greeting, company named, link present, no job ID unless real, no implied shared college for non-alumni, sender is a student. Recruiters get an intro (no referral ask). Templates (`core/messages/templates.ts`) are the fallback; outcome replies (resume/thank-you) may start as templates.
+- **Replies**: user pastes their reply → `readReply` → outcome + suggested event (user confirms) + drafted answer.
+- **LinkedIn paste**: user copies a People page; `source` decides what's trusted (company page ⇒ employer; college-filtered ⇒ alumni, opt-in); "1st" badge ⇒ connected; ex-employees and "LinkedIn Member" dropped.
 
 ## External services
 | Service | Use | Notes |
 |---|---|---|
 | Neon Postgres | All data | Pooled URL for app, direct URL for migrations; scale-to-zero |
 | Google OAuth | Sign-in | Testing mode, only test users can log in |
-| Gemini API | Job analysis, people classification | `gemini-3.5-flash`, thinking minimal/low; free tier |
+| Gemini API | Job analysis, classification, message writing, reply reading, page parsing | `gemini-3.5-flash`, thinking minimal/low; on 429 tries `GEMINI_MODEL_FALLBACKS` (per-model free quotas) before Groq |
 | Groq | Fallback LLM | `openai/gpt-oss-120b` |
 | Serper | People search | Free plan: no quotes/`site:`/`OR`, 10 results/query |
 
 ## Deployment
-Target: one Render free web service running both processes (Next public on `$PORT`, Express internal on `API_PORT`, same `/api` rewrite as local). Better Stack monitors `/healthz` (no DB) to keep it awake. Neon stays separate. Setup steps → `docs/DEVELOPMENT.md`.
+Live at https://referral-copilot.onrender.com: one Render free web service running both processes (Next public on `$PORT`, Express internal on `API_PORT`, same `/api` rewrite as local), auto-deploys on push to `main`. Better Stack monitors `/healthz` (no DB) to keep it awake. Database: Neon project `referral-copilot` (`billowing-waterfall-82246403`), single branch **`production`**, shared by local dev and Render. Setup → `docs/DEVELOPMENT.md`.

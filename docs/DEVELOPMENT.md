@@ -32,17 +32,20 @@ No browser/E2E tests in the repo yet (earlier ad-hoc Playwright runs used a DB-c
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | OAuth web client; redirect URI `<BETTER_AUTH_URL>/api/auth/callback/google` |
 | `GEMINI_API_KEY`, `GROQ_API_KEY` | LLM providers (optional; app falls back to rules) |
 | `GEMINI_MODEL_FAST`, `GEMINI_MODEL_QUALITY`, `GROQ_MODEL` | Optional model overrides (defaults in `apps/api/src/env.ts`) |
+| `GEMINI_MODEL_FALLBACKS` | Comma list tried on Gemini quota errors (default `gemini-flash-lite-latest,gemini-3.5-flash-lite`) |
 | `SERPER_API_KEY` (or `TAVILY_API_KEY`) | People search; without it the UI shows a setup card |
 | `API_PORT` | Internal API port, default 4000 (`PORT` is reserved for the public web server) |
 | `API_URL` | (web) where `/api` is proxied, default `http://localhost:4000` |
 
-## Deployment (Render, single free web service)
+## Deployment (Render, single free web service, https://referral-copilot.onrender.com)
+- Render settings: Build `bash scripts/render-build.sh` · Start `npm start` · Health check `/healthz` · Region Singapore · Auto-deploy on `main`.
+- Google OAuth client has both `http://localhost:3000` and the Render origin (+ `/api/auth/callback/google`) registered.
 - Web and API run in **one** service (`npm start` → concurrently: API on `API_PORT`, Next on Render's `PORT`). The free plan has 750 instance-hours/month per workspace; one always-on service ≈ 744 h.
 - Build command: `bash scripts/render-build.sh` (install → prisma generate → `migrate deploy` → next build). It runs pnpm via `npx pnpm@<packageManager version>` because Render's pnpm is read-only and `corepack enable` fails there (EROFS); bundled corepack also can't run pnpm 12. Start command: `npm start`. Do **not** set `NODE_ENV` on Render (pnpm would skip devDependencies needed for the build); the start scripts set production mode.
 - Node version from `.node-version` (22, bundles corepack). Health check `/healthz` (web route, no DB access). Better Stack pings it every 3 min to prevent spin-down.
 - Google OAuth client needs the Render origin and `<origin>/api/auth/callback/google`; `BETTER_AUTH_URL` = Render origin.
 
-`apps/api/src/env.ts` validates on start and prints only variable names on failure. Neon: develop on the `dev` branch; switch both URLs to `main` for real use.
+`apps/api/src/env.ts` validates on start and prints only variable names on failure. Neon: one branch, `production`, used by both local and Render (there is no dev branch any more; the old `dev` branch and its data were lost on 2026-10-21). Paste URLs into Render **without quotes** (the code now strips them anyway). A P1000 "authentication failed" means the Neon password changed: copy fresh strings from Neon → Connect into `.env` and Render.
 
 ## Conventions
 - Logic goes in `packages/core` as pure functions with tests; API services do IO and transactions.

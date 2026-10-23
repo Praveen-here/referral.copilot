@@ -24,7 +24,8 @@ pnpm monorepo, TypeScript everywhere · **web**: Next.js 16 (App Router), React 
 - For any UI work, use the **apple-design skill**. Look: light theme, flat, premium, Notion-like; whitespace, system font, quiet colors, few clicks; respond on press; springs; respect reduced motion. Design tokens live in `apps/web/app/globals.css`; reuse them.
 - **Never** add code that makes network requests to linkedin.com or automates LinkedIn (scraping, clicking, sending). Opening a LinkedIn URL in the user's own browser tab is fine. The API's job-posting reader only fetches Greenhouse/Lever APIs.
 - Secrets live in `.env` (repo root, git-ignored). **Never read, print or commit values.** When inspecting `.env`, print variable names only.
-- Generated messages must contain no em/en dashes, no stock AI phrases, and only verified facts (`packages/core/src/messages/validate.ts`).
+- Generated messages must contain no em/en dashes, no stock AI phrases, and only verified facts (`packages/core/src/messages/validate.ts`); follow the user's message shape in `docs/PREFERENCES.md` (always name the company; quote a job ID only if it's the company's real one).
+- Push to GitHub only when the user says "push".
 - Every DB query is scoped by `userId`. Pipeline state changes go through `transition()` (core) + `applyEvent()` (api), never raw state writes.
 - Neon round trips are ~150 ms: batch writes, avoid per-row queries in loops, no polling workers.
 
@@ -33,9 +34,16 @@ pnpm monorepo, TypeScript everywhere · **web**: Next.js 16 (App Router), React 
 - Discovery never invents people or schools: candidates must come from a real search result showing the company in the Experience field or title (`discovery/verify.ts`).
 - Interns are never referral targets; max 3 recruiters in a top 15.
 
+## Live
+https://referral-copilot.onrender.com · GitHub `Praveen-here/referral.copilot` (`main`, auto-deploys to Render) · Neon branch `production` (only branch).
+
 ## Doc map (read only when relevant)
+- Current status, known issues, next tasks → `docs/PROGRESS.md` (read first)
+- How the user likes to work + required message style → `docs/PREFERENCES.md`
 - Architecture, data flow, components → `docs/ARCHITECTURE.md`
-- Setup, commands, env vars, migrations → `docs/DEVELOPMENT.md`
+- Every API route and page → `docs/API.md`
+- Setup, commands, env vars, migrations, deployment → `docs/DEVELOPMENT.md`
 - Why things are the way they are → `docs/DECISIONS.md`
-- Current status, known issues, next tasks → `docs/PROGRESS.md`
-- Original product spec and research (long, partly superseded; use for product questions only) → `docs/IMPLEMENTATION_PLAN.md`
+- Research: who refers, message rules, platform limits → `docs/research/referral-research.md`; early postings & referral strategy (user's) → `docs/research/job-search-research.md`
+- Feature ideas from that research → `docs/ROADMAP.md`
+- Original product spec (long, partly superseded; product questions only) → `docs/IMPLEMENTATION_PLAN.md`
