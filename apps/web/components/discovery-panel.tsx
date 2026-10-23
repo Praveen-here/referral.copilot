@@ -136,17 +136,19 @@ export function DiscoveryPanel({
   if (!run || error) {
     return (
       <Card>
-        <div className="flex flex-wrap items-center gap-4">
-          <Icon tone="blue">
-            <Search size={18} />
-          </Icon>
-          <div className="min-w-0 flex-1">
-            <p className="text-headline">{hasPeople ? "Find more people" : "Find the 15 best people to ask"}</p>
-            <p className="text-ink-2">
-              {error ?? "Alumni first, then engineers in the same area and campus recruiters. Every person is checked against a real search result."}
-            </p>
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+          <div className="flex min-w-0 flex-1 items-start gap-4 sm:items-center">
+            <Icon tone="blue">
+              <Search size={18} />
+            </Icon>
+            <div className="min-w-0 flex-1">
+              <p className="text-headline">{hasPeople ? "Find more people" : "Find the 15 best people to ask"}</p>
+              <p className="text-ink-2">
+                {error ?? "Alumni first, then engineers in the same area and campus recruiters. Every person is checked against a real search result."}
+              </p>
+            </div>
           </div>
-          <Button variant="primary" icon={<Sparkles size={15} />} loading={start.isPending} onClick={() => start.mutate()}>
+          <Button variant="primary" icon={<Sparkles size={15} />} loading={start.isPending} onClick={() => start.mutate()} className="w-full sm:w-auto">
             {error ? "Try again" : "Find people"}
           </Button>
         </div>
@@ -162,17 +164,20 @@ export function DiscoveryPanel({
       <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} transition={spring} className="flex flex-col gap-3">
         {college && alumni === 0 && (
           <Card>
-            <div className="flex flex-wrap items-center gap-4">
-              <Icon tone="blue">
-                <GraduationCap size={18} />
-              </Icon>
-              <div className="min-w-0 flex-1">
-                <p className="text-headline">No {college} alumni found in web search</p>
-                <p className="text-ink-2">
-                  Either there are very few at {companyName}, or their profiles don&apos;t show it publicly. LinkedIn&apos;s own People filter is the most accurate way to check.
-                </p>
+            {/* Phones stack the button under the text; a shrinking flex-1 column never wraps on its own. */}
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+              <div className="flex min-w-0 flex-1 items-start gap-4 sm:items-center">
+                <Icon tone="blue">
+                  <GraduationCap size={18} />
+                </Icon>
+                <div className="min-w-0 flex-1">
+                  <p className="text-headline">No {college} alumni found in web search</p>
+                  <p className="text-ink-2">
+                    Either there are very few at {companyName}, or their profiles don&apos;t show it publicly. LinkedIn&apos;s own People filter is the most accurate way to check.
+                  </p>
+                </div>
               </div>
-              <Button variant="primary" icon={<ClipboardPaste size={15} />} onClick={onPaste}>
+              <Button variant="primary" icon={<ClipboardPaste size={15} />} onClick={onPaste} className="w-full sm:w-auto">
                 Check on LinkedIn
               </Button>
             </div>
