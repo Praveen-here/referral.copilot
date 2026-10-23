@@ -44,6 +44,6 @@ https://referral-copilot.onrender.com · GitHub `Praveen-here/referral.copilot` 
 - Every API route and page → `docs/API.md`
 - Setup, commands, env vars, migrations, deployment → `docs/DEVELOPMENT.md`
 - Why things are the way they are → `docs/DECISIONS.md`
-- Research: who refers, message rules, platform limits → `docs/research/referral-research.md`; early postings & referral strategy (user's) → `docs/research/job-search-research.md`
+- Research: who refers, message rules, platform limits → `docs/research/referral-research.md`; early postings & referral strategy (user's) → `docs/research/job-search-research.md`; India intern hiring, job feeds, 204-company CSV, social channels (2026-10-24) → `docs/research/reports/` (notes in `research_notes/`)
 - Feature ideas from that research → `docs/ROADMAP.md`
 - Original product spec (long, partly superseded; product questions only) → `docs/IMPLEMENTATION_PLAN.md`

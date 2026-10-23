@@ -85,3 +85,7 @@ Format: **Decision** / Reason / Consequence. Newest last.
 21. **Show debugwithshubham.com's hand-curated list too.** (user approved, 2026-10-24)
     Reverse-engineering showed it's a Next.js page over a public FastAPI `/api/jobs/` list that an admin fills by hand (batched timestamps, form defaults, untrimmed names). Its apply links also reveal company boards to watch directly.
     Read at most 3 pages per scan, personal use only, never republished; each row links to the source. Their "posted" time is when they added it, not when the company posted it, so the company's own board copy wins in de-duplication.
+
+22. **No Reddit API, no user passwords; Reddit/LinkedIn/X content only via Google results or user pastes.**
+    Reddit closed self-service API access (Responsible Builder Policy, Nov 2025); new Data API apps are for moderation use cases only, and the user's use isn't one. LinkedIn bans automation even on the user's own login, and a ban would cost the account used for outreach.
+    Research uses Claude's web search; in-app, prefer paste-a-post over Serper post searches (Google indexes only a small, popularity-biased slice of posts).

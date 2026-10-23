@@ -48,6 +48,19 @@ No browser/E2E tests in the repo yet (earlier ad-hoc Playwright runs used a DB-c
 
 `apps/api/src/env.ts` validates on start and prints only variable names on failure. Neon: one branch, `production`, used by both local and Render (there is no dev branch any more; the old `dev` branch and its data were lost on 2026-10-21). Paste URLs into Render **without quotes** (the code now strips them anyway). A P1000 "authentication failed" means the Neon password changed: copy fresh strings from Neon → Connect into `.env` and Render.
 
+## Openings scans (job feeds)
+- In the app: `GET /api/v1/openings` starts a background scan when the last one is over 2 h old ("Check now" = 10 min). A full scan of ~123 boards takes 1–1.5 min.
+- While the app is closed: cron-job.org (user's free account) job **Referral Copilot scan** → `GET https://referral-copilot.onrender.com/api/cron/openings`, every 2 hours (`0 */2 * * *`, UTC), header `x-cron-key: <CRON_SECRET>`, "Save responses in job history" on. Expected response: 202 `{"scanning":true}` (or `false` if a scan ran <30 min ago); 404 = secret mismatch or deploy not live.
+- `CRON_SECRET` is set on Render only (not needed locally). To change it, update Render **and** the cron-job.org header.
+- Run a scan by hand locally: a throwaway tsx script that imports `./env` then calls `scanOpenings()` from `services/openings` (writes only to `job_board`/`job_posting`).
+
+## Safe migrations (one shared production DB)
+There is no dev database, so `prisma migrate dev` is risky (it can offer to reset the DB on drift). Instead:
+1. Edit `schema.prisma`, save the old one: `git show HEAD:packages/db/prisma/schema.prisma > old.prisma`.
+2. `npx prisma migrate diff --from-schema old.prisma --to-schema prisma/schema.prisma --script > prisma/migrations/<timestamp>_<name>/migration.sql`, then delete the dotenv line ("◇ injected env…") it writes at the top.
+3. Read the SQL: additive only unless the user approved otherwise. Ask before applying.
+4. `npx prisma migrate deploy` (never resets) and `npx prisma generate`. Render's build also runs `migrate deploy`.
+
 ## Conventions
 - Logic goes in `packages/core` as pure functions with tests; API services do IO and transactions.
 - Prompts are versioned (`packages/ai/src/prompts/*`, `promptVersion`); bump on behavior change.
