@@ -73,3 +73,15 @@ Format: **Decision** / Reason / Consequence. Newest last.
 18. **One Neon branch (`production`) shared by local and Render.**
     The `dev` branch was deleted (cause unclear; Neon doesn't auto-delete) with 5 companies of data; free plan can't restore deleted branches.
     Keep a single branch to avoid split data; consider a periodic export (pg_dump) before risky changes.
+
+19. **Read every public job feed, not only Greenhouse/Lever.** (user, 2026-10-24: "grab almost all the opportunity out there")
+    Research found Greenhouse+Lever+Ashby+Workday reach ~40–50% of well-known Indian companies; limiting to two systems missed most of them.
+    Readers in `services/feeds.ts` for Greenhouse, Lever, Ashby, SmartRecruiters, Workday CXS, amazon.jobs and debugwithshubham.com. Still never LinkedIn automation, logins, bot-check bypasses, or sites whose terms ban crawling (Naukri, Internshala, Unstop; Darwinbox sits behind Cloudflare). Boards come from real links (seed list, user's job URLs, aggregator apply links), never guessed from names: guessed slugs matched unrelated companies 10+ times.
+
+20. **Early job alerts: scan on open + optional outside cron, first-seen diffing, shared public tables.**
+    No polling worker (#4). A scan starts when `/openings` is requested and the last scan is >2 h old, or when an outside scheduler calls `/api/cron/openings` (needs `CRON_SECRET`). All feeds are read concurrently (≤4 per job system, 2 for Workday), IDs diffed in memory, then one batched transaction.
+    "New" = first seen in the last 3 days (not on a board's first scan) or dated by the feed within 2 days. `job_board`/`job_posting` are public data shared by all users (an exception to per-user scoping); what a user did with a posting is per user in `posting_action`. Only India tech roles at intern/entry/unspecified level are stored.
+
+21. **Show debugwithshubham.com's hand-curated list too.** (user approved, 2026-10-24)
+    Reverse-engineering showed it's a Next.js page over a public FastAPI `/api/jobs/` list that an admin fills by hand (batched timestamps, form defaults, untrimmed names). Its apply links also reveal company boards to watch directly.
+    Read at most 3 pages per scan, personal use only, never republished; each row links to the source. Their "posted" time is when they added it, not when the company posted it, so the company's own board copy wins in de-duplication.

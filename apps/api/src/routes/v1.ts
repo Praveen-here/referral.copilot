@@ -10,6 +10,7 @@ import { generateDraft, getOrWriteDraft } from "../services/messages";
 import { readReply } from "../services/replies";
 import { searchConfigured } from "../services/search";
 import { applyEvent, undoLastEvent } from "../services/outreach";
+import { addOpening, dismissOpening, listOpenings, maybeStartScan, undismissOpening, watchBoardFromUrl } from "../services/openings";
 import { addPersonToJob, findOrCreateCompany } from "../services/people";
 import { createSampleData, removeSampleData } from "../services/sample";
 import { companyDetail, inviteBudget, jobDetail, sidebar, today } from "../services/views";
@@ -149,6 +150,8 @@ v1.post("/jobs", async (req, res) => {
   const job = await prisma.jobOpportunity.create({ data: { ...jobData, userId, companyId: company.id } });
   // Start reading the job now so the analysis is ready by the time the page loads.
   void ensureAnalysis(userId, job.id).catch((e) => console.warn("Background job analysis failed", e));
+  // A Greenhouse/Lever/… link means this company's board can be watched for new roles.
+  void watchBoardFromUrl(job.url, company.name).catch((e) => console.warn("Could not watch job board", e));
   res.status(201).json(job);
 });
 
@@ -282,6 +285,33 @@ v1.post("/messages/:id/sent", async (req, res) => {
 v1.post("/messages/:id/discard", async (req, res) => {
   const message = await findDraft(res.locals.userId, id(req.params.id));
   res.json(await prisma.message.update({ where: { id: message.id }, data: { status: "DISCARDED" } }));
+});
+
+// ───────────── Openings (public job feeds) ─────────────
+
+v1.get("/openings", async (_req, res) => {
+  // Opening the list is what keeps it fresh: a stale list starts a background scan.
+  await maybeStartScan();
+  res.json(await listOpenings(res.locals.userId));
+});
+
+/** "Check now": rescans unless the last scan was under 10 minutes ago. */
+v1.post("/openings/scan", async (_req, res) => {
+  res.status(202).json({ scanning: await maybeStartScan(10 * 60_000) });
+});
+
+v1.post("/openings/:id/add", async (req, res) => {
+  res.status(201).json(await addOpening(res.locals.userId, id(req.params.id)));
+});
+
+v1.post("/openings/:id/dismiss", async (req, res) => {
+  await dismissOpening(res.locals.userId, id(req.params.id));
+  res.status(204).end();
+});
+
+v1.delete("/openings/:id/dismiss", async (req, res) => {
+  await undismissOpening(res.locals.userId, id(req.params.id));
+  res.status(204).end();
 });
 
 // ───────────── Sample data (development only) ─────────────

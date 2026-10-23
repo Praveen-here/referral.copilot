@@ -26,6 +26,8 @@ const schema = z.object({
   // People search: Serper (Google results) preferred, Tavily as an alternative.
   SERPER_API_KEY: z.string().optional(),
   TAVILY_API_KEY: z.string().optional(),
+  // Lets an outside scheduler (cron-job.org, Better Stack) start job-feed scans while the app is closed.
+  CRON_SECRET: z.string().min(16).optional(),
 });
 
 const parsed = schema.safeParse(process.env);

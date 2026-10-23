@@ -94,3 +94,32 @@ export interface Me {
   university: string | null;
   onboarded: boolean;
 }
+
+export type OpeningLevel = "INTERN" | "ENTRY" | "UNSPECIFIED";
+
+export interface Opening {
+  id: string;
+  companyName: string;
+  title: string;
+  location: string | null;
+  url: string;
+  level: OpeningLevel;
+  /** Which feed it came from: greenhouse, lever, ashby, smartrecruiters, workday, amazon, debugwithshubham. */
+  source: string;
+  alsoOnAggregator: boolean;
+  postedAt: string | null;
+  firstSeenAt: string;
+  isNew: boolean;
+  salary: string | null;
+  workType: string | null;
+  /** Set once the user added it as a job. */
+  jobId: string | null;
+}
+
+export interface Openings {
+  lastScanAt: string | null;
+  scanning: boolean;
+  boardCount: number;
+  counts: { new: number; intern: number; entry: number; all: number };
+  items: Opening[];
+}

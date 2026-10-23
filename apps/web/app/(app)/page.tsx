@@ -6,10 +6,11 @@ import { ArrowRight, Sparkles, Sun } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useShell } from "@/components/app-shell";
+import { OpeningRow } from "@/components/opening-row";
 import { PersonRow } from "@/components/person-row";
 import { Button, EmptyState, SectionHeader, Spinner, spring } from "@/components/ui";
 import { api } from "@/lib/api";
-import { useMe, useRefreshPipeline, useSidebar, useToday } from "@/lib/queries";
+import { useMe, useOpenings, useRefreshPipeline, useSidebar, useToday } from "@/lib/queries";
 import type { Person } from "@/lib/types";
 
 const greeting = () => {
@@ -90,7 +91,39 @@ export default function TodayPage() {
           <EmptyState icon={<Sun size={20} />} title="All caught up" body="When someone accepts, replies, or needs a follow-up, it shows up here." />
         </div>
       )}
+
+      {!isLoading && <NewOpenings />}
     </div>
+  );
+}
+
+/** The newest roles from company job boards; the full list lives on /openings. */
+function NewOpenings() {
+  const { data } = useOpenings();
+  if (!data || (data.counts.all === 0 && !data.scanning)) return null;
+  const fresh = data.items.filter((o) => o.isNew && o.level !== "UNSPECIFIED" && !o.jobId).slice(0, 3);
+  return (
+    <section className="mt-10">
+      <SectionHeader title="New openings" count={data.counts.new}>
+        <Link href="/openings" className="pressable flex items-center gap-1 rounded-control px-1.5 py-0.5 text-caption font-medium text-accent hover:bg-accent-soft">
+          See all {data.counts.all} <ArrowRight size={13} />
+        </Link>
+      </SectionHeader>
+      {fresh.length > 0 ? (
+        <>
+          <p className="-mt-1 mb-2 px-1 text-caption text-ink-3">Just posted. Referrals help most in a role&apos;s first days.</p>
+          <ul className="-mx-3 flex flex-col">
+            {fresh.map((o) => (
+              <OpeningRow key={o.id} opening={o} />
+            ))}
+          </ul>
+        </>
+      ) : (
+        <p className="px-1 text-caption text-ink-3">
+          {data.scanning ? "Checking job boards for new roles…" : "Nothing new since the last check. Older openings are on the Openings page."}
+        </p>
+      )}
+    </section>
   );
 }
 

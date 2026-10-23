@@ -22,11 +22,11 @@ pnpm monorepo, TypeScript everywhere · **web**: Next.js 16 (App Router), React 
 
 ## Rules
 - For any UI work, use the **apple-design skill**. Look: light theme, flat, premium, Notion-like; whitespace, system font, quiet colors, few clicks; respond on press; springs; respect reduced motion. Design tokens live in `apps/web/app/globals.css`; reuse them.
-- **Never** add code that makes network requests to linkedin.com or automates LinkedIn (scraping, clicking, sending). Opening a LinkedIn URL in the user's own browser tab is fine. The API's job-posting reader only fetches Greenhouse/Lever APIs.
+- **Never** add code that makes network requests to linkedin.com or automates LinkedIn (scraping, clicking, sending). Opening a LinkedIn URL in the user's own browser tab is fine. Job feeds: read any public, unauthenticated job feed (Greenhouse, Lever, Ashby, SmartRecruiters, Workday, amazon.jobs, debugwithshubham.com; `apps/api/src/services/feeds.ts`), but never get past logins, bot checks or sites whose terms forbid crawling (Naukri, Internshala, Unstop, Darwinbox).
 - Secrets live in `.env` (repo root, git-ignored). **Never read, print or commit values.** When inspecting `.env`, print variable names only.
 - Generated messages must contain no em/en dashes, no stock AI phrases, and only verified facts (`packages/core/src/messages/validate.ts`); follow the user's message shape in `docs/PREFERENCES.md` (always name the company; quote a job ID only if it's the company's real one).
 - Push to GitHub only when the user says "push".
-- Every DB query is scoped by `userId`. Pipeline state changes go through `transition()` (core) + `applyEvent()` (api), never raw state writes.
+- Every DB query is scoped by `userId` (exception: `job_board`/`job_posting` are shared public feed data; per-user state lives in `posting_action`). Pipeline state changes go through `transition()` (core) + `applyEvent()` (api), never raw state writes.
 - Neon round trips are ~150 ms: batch writes, avoid per-row queries in loops, no polling workers.
 
 ## Invariants worth knowing

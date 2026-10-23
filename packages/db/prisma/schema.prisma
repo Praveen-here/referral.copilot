@@ -29,6 +29,7 @@ model User {
   contacts   Contact[]
   outreach   Outreach[]
   aiRuns     AiRun[]
+  postingActions PostingAction[]
 
   @@map("user")
 }
@@ -380,6 +381,84 @@ model Message {
 
   @@index([outreachId])
   @@map("message")
+}
+
+// ───────────── Openings (public job feeds) ─────────────
+// Boards and postings are public data shared by every user; what a user did with
+// a posting (dismissed, added as a job) is per user in `posting_action`.
+
+enum BoardOrigin {
+  SEED       // from docs/research company list
+  JOB_URL    // a job the user added links to this board
+  AGGREGATOR // an aggregator's apply link pointed here
+}
+
+model JobBoard {
+  id          String       @id @default(cuid())
+  /// greenhouse | lever | ashby | smartrecruiters | workday | amazon | debugwithshubham (core AtsKind)
+  ats         String
+  slug        String
+  companyName String
+  origin      BoardOrigin
+  active      Boolean      @default(true)
+  lastScanAt  DateTime?
+  lastError   String?
+  failCount   Int          @default(0)
+  createdAt   DateTime     @default(now())
+  postings    JobPosting[]
+
+  @@unique([ats, slug])
+  @@map("job_board")
+}
+
+enum PostingLevel {
+  INTERN
+  ENTRY
+  UNSPECIFIED
+}
+
+model JobPosting {
+  id          String          @id @default(cuid())
+  boardId     String
+  board       JobBoard        @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  externalId  String
+  companyName String
+  title       String
+  location    String?
+  url         String
+  level       PostingLevel
+  /// The date the feed gives, if any (Workday's is approximate).
+  postedAt    DateTime?
+  firstSeenAt DateTime        @default(now())
+  lastSeenAt  DateTime        @default(now())
+  closedAt    DateTime?
+  /// Seen on the board's first scan, so "first seen" says nothing about when it was posted.
+  isBaseline  Boolean         @default(false)
+  /// Small source-specific facts: { salary, workType, jobReqId }
+  extra       Json?
+  actions     PostingAction[]
+
+  @@unique([boardId, externalId])
+  @@index([closedAt, firstSeenAt])
+  @@map("job_posting")
+}
+
+enum PostingActionStatus {
+  DISMISSED
+  ADDED
+}
+
+model PostingAction {
+  userId    String
+  user      User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  postingId String
+  posting   JobPosting          @relation(fields: [postingId], references: [id], onDelete: Cascade)
+  status    PostingActionStatus
+  jobId     String?
+  createdAt DateTime            @default(now())
+
+  @@id([userId, postingId])
+  @@map("posting_action")
 }
 
 // ───────────── AI bookkeeping ─────────────

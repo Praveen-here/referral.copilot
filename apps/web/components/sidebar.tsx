@@ -1,12 +1,12 @@
 "use client";
 
 import { motion } from "motion/react";
-import { CircleUserRound, LogOut, Plus, Search, Sun } from "lucide-react";
+import { CircleUserRound, LogOut, Plus, Radar, Search, Sun } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import { cn } from "@/lib/cn";
-import { useMe, useSidebar, useSignOut } from "@/lib/queries";
+import { useMe, useOpenings, useSidebar, useSignOut } from "@/lib/queries";
 import { useShell } from "./app-shell";
 import { Avatar, Logo, spring } from "./ui";
 
@@ -17,6 +17,7 @@ export function Sidebar() {
   const signOut = useSignOut();
   const { data: companies } = useSidebar();
   const { data: me } = useMe();
+  const newOpenings = useOpenings().data?.counts.new ?? 0;
 
   return (
     <aside className="hidden h-full w-60 shrink-0 flex-col border-r border-line bg-sidebar md:flex">
@@ -35,6 +36,13 @@ export function Sidebar() {
           <kbd className="rounded-[4px] border border-line-strong bg-canvas px-1.5 font-sans text-[0.6875rem] text-ink-3">Ctrl K</kbd>
         </button>
         <NavItem href="/" active={pathname === "/"} icon={<Sun size={16} />} label="Today" />
+        <NavItem
+          href="/openings"
+          active={pathname === "/openings"}
+          icon={<Radar size={16} />}
+          label="Openings"
+          trailing={newOpenings ? <span className="text-caption font-medium text-accent tabular-nums">{newOpenings} new</span> : null}
+        />
       </nav>
 
       <div className="mt-6 px-4 pb-1.5">

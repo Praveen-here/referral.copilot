@@ -34,6 +34,7 @@ No browser/E2E tests in the repo yet (earlier ad-hoc Playwright runs used a DB-c
 | `GEMINI_MODEL_FAST`, `GEMINI_MODEL_QUALITY`, `GROQ_MODEL` | Optional model overrides (defaults in `apps/api/src/env.ts`) |
 | `GEMINI_MODEL_FALLBACKS` | Comma list tried on Gemini quota errors (default `gemini-flash-lite-latest,gemini-3.5-flash-lite`) |
 | `SERPER_API_KEY` (or `TAVILY_API_KEY`) | People search; without it the UI shows a setup card |
+| `CRON_SECRET` (optional, 16+ chars) | Enables `/api/cron/openings` so an outside scheduler can scan job feeds while the app is closed |
 | `API_PORT` | Internal API port, default 4000 (`PORT` is reserved for the public web server) |
 | `API_URL` | (web) where `/api` is proxied, default `http://localhost:4000` |
 

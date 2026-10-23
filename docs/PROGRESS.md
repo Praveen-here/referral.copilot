@@ -14,6 +14,7 @@ Live at https://referral-copilot.onrender.com (Render, auto-deploys from `main`)
 - Paste a reply → outcome, suggested status, drafted answer
 - Today page, invite budget (15/day, 100/week), Ctrl+K people search with inline "Accepted", sample data
 - Mobile: bottom tab bar, `/companies`, bottom sheets, 16px inputs, safe areas; logo/favicon
+- Early job alerts (2026-10-24): `/openings` page + Today section; ~88 seed boards over 7 feed types, boards auto-added from job URLs and debugwithshubham apply links; New/Intern/Entry filters; one click → job + discovery; hide with undo
 - Docs: CLAUDE.md + `docs/` (architecture, development, decisions, API, preferences, research, roadmap)
 
 ## In progress
@@ -30,7 +31,7 @@ Live at https://referral-copilot.onrender.com (Render, auto-deploys from `main`)
 - Serper key exposed in chat 2026-10-20; rotation unverified
 
 ## Next
-1. Early-posting monitor + "posted X ago" genuineness badge (`docs/ROADMAP.md`, from `docs/research/job-search-research.md`)
+1. Openings follow-ups: outside cron (cron-job.org → `/api/cron/openings`, set `CRON_SECRET` on Render) so scans run while the app is closed; Keka/Zoho readers; paste-a-hiring-post + scam check; funded-startup tracker (`docs/research/reports/`)
 2. Warm-up step / founder targeting / "ping the hiring manager" line (ROADMAP)
 3. Fix known issues; periodic DB export
 4. Settings page, data export/delete, analytics

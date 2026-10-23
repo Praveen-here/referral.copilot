@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { useFeedback } from "@/components/feedback";
 import { api, ApiError } from "./api";
 import { authClient } from "./auth-client";
-import type { Budget, JobDetail, Me, Person, SidebarCompany, Today } from "./types";
+import type { Budget, JobDetail, Me, Openings, Person, SidebarCompany, Today } from "./types";
 
 export const keys = {
   me: ["me"] as const,
@@ -15,6 +15,7 @@ export const keys = {
   company: (id: string) => ["company", id] as const,
   job: (id: string) => ["job", id] as const,
   budget: ["budget"] as const,
+  openings: ["openings"] as const,
 };
 
 export const useMe = () => useQuery({ queryKey: keys.me, queryFn: () => api<Me>("/me") });
@@ -149,3 +150,11 @@ export function useOutreachEvent() {
     },
   });
 }
+
+/** Openings from job feeds. While a scan runs the list refetches every few seconds, so its results show as soon as it finishes. */
+export const useOpenings = () =>
+  useQuery({
+    queryKey: keys.openings,
+    queryFn: () => api<Openings>("/openings"),
+    refetchInterval: (q) => (q.state.data?.scanning ? 5_000 : false),
+  });

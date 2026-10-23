@@ -15,6 +15,7 @@ Modular monolith: one API process, no queue/worker, no Redis. Background work (d
 | `apps/api` routes | REST under `/api/v1`, Zod-validated, `requireUser` middleware sets `res.locals.userId`. Errors: `{error:{code,message,details,requestId}}` |
 | `services/outreach` | `applyEvent`: transition + optimistic-lock (`version`) + event log + auto-drafts; `undoLastEvent` (2 min window); reserve promotion |
 | `services/discovery` | Discovery run: analyze job → plan queries → search → verify → classify (AI) → score → save top 15 + 10 reserves. Progress on `discovery_run` row; UI polls |
+| `services/openings` + `feeds` | Early job alerts: reads public job feeds (`feeds.ts`), diffs IDs against `job_posting`, lists openings, turns one into a job. Scan on open (>2 h) or via `/api/cron/openings`; seed boards in `openings-seed.ts`; filters in `core/postings.ts` |
 | `services/jobs` | Job posting reader (Greenhouse/Lever public APIs; LinkedIn URLs → "paste the JD", never fetched) and `ensureAnalysis` (AI, with rule fallback) |
 | `services/messages` | `generateDraft`: facts → Gemini writes → code checks → one corrective retry → template fallback; Rewrite styles; in-flight dedupe |
 | `services/replies` | `readReply`: AI classifies a pasted reply → suggested event + outcome-specific draft (thank-you / resume / answer) |
@@ -46,6 +47,7 @@ Modular monolith: one API process, no queue/worker, no Redis. Background work (d
 | Gemini API | Job analysis, classification, message writing, reply reading, page parsing | `gemini-3.5-flash`, thinking minimal/low; on 429 tries `GEMINI_MODEL_FALLBACKS` (per-model free quotas) before Groq |
 | Groq | Fallback LLM | `openai/gpt-oss-120b` |
 | Serper | People search | Free plan: no quotes/`site:`/`OR`, 10 results/query |
+| Public job feeds | Openings | Greenhouse, Lever, Ashby, SmartRecruiters, Workday CXS, amazon.jobs, debugwithshubham.com; no keys; see DECISIONS #19–21 |
 
 ## Deployment
 Live at https://referral-copilot.onrender.com: one Render free web service running both processes (Next public on `$PORT`, Express internal on `API_PORT`, same `/api` rewrite as local), auto-deploys on push to `main`. Better Stack monitors `/healthz` (no DB) to keep it awake. Database: Neon project `referral-copilot` (`billowing-waterfall-82246403`), single branch **`production`**, shared by local dev and Render. Setup → `docs/DEVELOPMENT.md`.

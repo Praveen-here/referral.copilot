@@ -8,3 +8,4 @@ export * from "./discovery/plan";
 export * from "./discovery/verify";
 export * from "./discovery/score";
 export * from "./jobs";
+export * from "./postings";
