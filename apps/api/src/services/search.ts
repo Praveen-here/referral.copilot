@@ -17,7 +17,8 @@ function serper(apiKey: string): SearchProvider {
       const res = await fetch("https://google.serper.dev/search", {
         method: "POST",
         headers: { "x-api-key": apiKey, "content-type": "application/json" },
-        body: JSON.stringify({ q: query, num: 20, gl: "in" }),
+        // The free plan allows site: only with at most 10 results (400 at num 20; checked 2026-10-25).
+        body: JSON.stringify({ q: query, num: /\bsite:/.test(query) ? 10 : 20, gl: "in" }),
         signal: AbortSignal.timeout(20_000),
       });
       const body = (await res.json().catch(() => ({}))) as { message?: string; organic?: { title?: string; link?: string; snippet?: string }[] };

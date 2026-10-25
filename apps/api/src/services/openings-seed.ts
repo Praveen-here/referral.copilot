@@ -3,8 +3,10 @@ import type { AtsKind } from "@rc/core";
 /**
  * Boards to watch from day one: every company in
  * docs/research/reports/india_tech_hiring_companies.csv whose feed answered on
- * 2026-10-23, minus slugs research flagged as unrelated companies. More boards are
- * added automatically from the jobs the user adds and from aggregator apply links.
+ * 2026-10-23, minus slugs research flagged as unrelated companies, plus boards that
+ * `src/scripts/find-boards.ts` found by search and verified on 2026-10-25 (marked below).
+ * More boards are added automatically from the jobs the user adds and from aggregator
+ * apply links.
  */
 export const SEED_BOARDS: [AtsKind, string, string][] = [
   // Greenhouse
@@ -38,12 +40,14 @@ export const SEED_BOARDS: [AtsKind, string, string][] = [
   ["greenhouse", "observeai", "Observe.AI"],
   ["greenhouse", "cloudsek", "CloudSEK"],
   ["greenhouse", "truefoundry", "TrueFoundry"],
+  ["greenhouse", "emergentlabsinc", "Emergent"], // found by search
   // Lever
   ["lever", "hevodata", "Hevo Data"],
   ["lever", "fampay", "FamPay"],
   ["lever", "neuron7", "Neuron7.ai"],
   ["lever", "meesho", "Meesho"],
   ["lever", "paytm", "Paytm"],
+  ["lever", "paytmpayments", "Paytm"], // found by search
   ["lever", "cred", "CRED"],
   ["lever", "zeta", "Zeta"],
   ["lever", "mindtickle", "Mindtickle"],
@@ -98,6 +102,14 @@ export const SEED_BOARDS: [AtsKind, string, string][] = [
   ["workday", "motorolasolutions.wd5/Careers", "Motorola Solutions"],
   ["workday", "browserstack.wd3/External", "BrowserStack"],
   ["workday", "sprinklr.wd1/careers", "Sprinklr"],
+  // Found by search; research's guessed tenants returned 422 (Walmart is wd504, not wd5).
+  ["workday", "micron.wd1/External", "Micron"],
+  ["workday", "broadcom.wd1/External_Career", "Broadcom"],
+  ["workday", "cisco.wd5/Cisco_Careers", "Cisco"],
+  ["workday", "walmart.wd504/WalmartExternal", "Walmart Global Tech"],
+  ["workday", "wf.wd1/WellsFargoJobs", "Wells Fargo"],
+  ["workday", "expedia.wd108/search", "Expedia"],
+  ["workday", "visa.wd5/Visa", "Visa"],
   // Own feeds
   ["amazon", "amazon", "Amazon"],
   ["debugwithshubham", "debugwithshubham", "debugwithshubham.com"],

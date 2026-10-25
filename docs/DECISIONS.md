@@ -28,7 +28,7 @@ Format: **Decision** / Reason / Consequence. Newest last.
 
 7. **People search via Serper (Google results), not Gemini Search grounding.**
    Grounding returned 429 on every model for this key and is unreliable even on paid tiers; Google's LinkedIn result titles/snippets are structured and verifiable in code.
-   Precision comes from `verifyCandidate`. Serper free plan forbids operators, so queries are plain keywords (more queries, ~8 per job).
+   Precision comes from `verifyCandidate`. Serper free plan forbids most operators (`OR` between `site:` filters, any `site:` query with `num` 20; `site:` alone works at ≤10 results, checked 2026-10-25), so people queries are plain keywords (more queries, ~8 per job).
 
 8. **Verify, don't trust: every candidate needs source evidence.**
    Hallucinated people or schools would put false claims into messages.
@@ -80,7 +80,7 @@ Format: **Decision** / Reason / Consequence. Newest last.
 
 20. **Early job alerts: scan on open + optional outside cron, first-seen diffing, shared public tables.**
     No polling worker (#4). A scan starts when `/openings` is requested and the last scan is >2 h old, or when an outside scheduler calls `/api/cron/openings` (needs `CRON_SECRET`). All feeds are read concurrently (≤4 per job system, 2 for Workday), IDs diffed in memory, then one batched transaction.
-    "New" = first seen in the last 3 days (not on a board's first scan) or dated by the feed within 2 days. `job_board`/`job_posting` are public data shared by all users (an exception to per-user scoping); what a user did with a posting is per user in `posting_action`. Only India tech roles at intern/entry/unspecified level are stored.
+    "New" = first seen in the last 3 days (not on a board's first scan) or dated by the feed within 2 days. `job_board`/`job_posting` are public data shared by all users (an exception to per-user scoping); what a user did with a posting is per user in `posting_action`. Only India tech roles at intern/entry/unspecified level are stored; an intern, apprentice or graduate program whose title names no field counts as tech unless it names a business function (user, 2026-10-25: don't drop "Grad Intern" for lacking a tech word).
 
 21. **Show debugwithshubham.com's hand-curated list too.** (user approved, 2026-10-24)
     Reverse-engineering showed it's a Next.js page over a public FastAPI `/api/jobs/` list that an admin fills by hand (batched timestamps, form defaults, untrimmed names). Its apply links also reveal company boards to watch directly.
@@ -89,3 +89,8 @@ Format: **Decision** / Reason / Consequence. Newest last.
 22. **No Reddit API, no user passwords; Reddit/LinkedIn/X content only via Google results or user pastes.**
     Reddit closed self-service API access (Responsible Builder Policy, Nov 2025); new Data API apps are for moderation use cases only, and the user's use isn't one. LinkedIn bans automation even on the user's own login, and a ban would cost the account used for outreach.
     Research uses Claude's web search; in-app, prefer paste-a-post over Serper post searches (Google indexes only a small, popularity-biased slice of posts).
+
+23. **Find missing job boards by web search, then verify; don't copy intern-list.com.** (user, 2026-10-25)
+    intern-list.com (run by Jobright.ai) is a Webflow page embedding ~31 public Airtable shared views; a script rebuilds each table daily from Jobright's own US job index (all rows recreated within ~1 min, apply links go to `jobright.ai/jobs/info/...`). It has no India roles (its 18 "India" matches were Indiana), so it isn't a source. What it does have is coverage: the gap is boards we don't know, not a cleverer fetch.
+    `services/board-finder.ts` searches `"<company> India site:<job system host>"` (Serper free plan allows `site:` only with ≤10 results), parses result links with `boardFromUrl`, keeps a board only if its tenant/slug matches the company (`boardMatchesCompany`: AMD's search returns Avnet's Workday first) and its feed answers. These are real links, so #19's no-guessing rule holds. Run once over the research CSV (`src/scripts/find-boards.ts`, 2026-10-25): 100 companies, 11 verified boards, 10 seeded (Qualcomm's `wd12/External` answers but is empty). The rest have no public feed (own sites, Darwinbox, Keka, TurboHire, YC/Wellfound); their careers pages are JS-rendered and expose no board links.
+    Jobright itself (job page `__NEXT_DATA__`, founder interviews in The Register 2025 / TechCrunch 2024): crawls ATS feeds, career sites and boards (~400k posts/day claimed), tags each job with `countryCode`, and runs every description through an LLM (normalized title, seniority, skills, salary range, H-1B/citizen/clearance flags). US-only by choice: the product is built around US visa sponsorship, and the founders say other countries come later. Only the seniority/eligibility part is worth having here (ROADMAP "Description check").

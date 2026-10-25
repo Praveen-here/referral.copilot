@@ -1,5 +1,7 @@
 // Openings from public job feeds: which postings are India tech roles a student can apply to.
 
+import { normalizeName } from "./text";
+
 export const ATS_KINDS = ["greenhouse", "lever", "ashby", "smartrecruiters", "workday", "amazon", "debugwithshubham"] as const;
 export type AtsKind = (typeof ATS_KINDS)[number];
 
@@ -51,7 +53,8 @@ export function boardFromUrl(rawUrl: string | null | undefined): BoardRef | null
   }
   const workday = host.match(/^([a-z0-9-]+)\.(wd\d+)\.myworkdayjobs\.com$/);
   if (workday) {
-    const rest = /^[a-z]{2}-[A-Z]{2}$/.test(seg[0] ?? "") ? seg.slice(1) : seg;
+    // Locale prefix: "en-US", or a bare language ("/es/External") on some tenants.
+    const rest = /^[a-z]{2}(-[A-Z]{2})?$/.test(seg[0] ?? "") ? seg.slice(1) : seg;
     if (!rest[0] || rest[0] === "wday") return null;
     return { ats: "workday", slug: `${workday[1]}.${workday[2]}/${rest[0]}`, jobId: rest.at(-1)?.match(/_([A-Z]*-?\d[\w-]*)$/)?.[1] ?? null };
   }
@@ -59,6 +62,49 @@ export function boardFromUrl(rawUrl: string | null | undefined): BoardRef | null
     return { ats: "amazon", slug: "amazon", jobId: url.pathname.match(/\/jobs\/(\d+)/)?.[1] ?? null };
   }
   return null;
+}
+
+/** Job systems a web search can find boards on, with the host to pass to `site:`. */
+export const BOARD_SEARCH_SITES = {
+  workday: "myworkdayjobs.com",
+  greenhouse: "greenhouse.io",
+  lever: "jobs.lever.co",
+  ashby: "jobs.ashbyhq.com",
+} as const satisfies Partial<Record<AtsKind, string>>;
+
+const NAME_NOISE = new Set([
+  "the", "and", "inc", "llc", "ltd", "limited", "pvt", "private", "corp", "corporation", "co", "company", "technologies", "technology",
+  "tech", "labs", "software", "solutions", "systems", "india", "global", "group", "ai", "now", "ex",
+]);
+
+/** "Eternal (Zomato, Blinkit)" and "Ola / Krutrim" name several brands; each is matched on its own. */
+function nameVariants(companyName: string): string[][] {
+  return companyName
+    .split(/[()/,;]+/)
+    .map((part) => normalizeName(part).split(" ").filter(Boolean))
+    .filter((tokens) => tokens.length > 0);
+}
+
+/**
+ * Whether a board found by web search belongs to this company, judged by its tenant or
+ * slug: "walmart.wd504/WalmartExternal" for Walmart Global Tech, "wf.wd1/..." for Wells
+ * Fargo. A search for one company also returns other companies' boards that mention it
+ * (AMD → Avnet's Workday), so anything that doesn't match is dropped.
+ */
+export function boardMatchesCompany(ref: Pick<BoardRef, "ats" | "slug">, companyName: string): boolean {
+  const raw = ref.ats === "workday" ? ref.slug.split(".")[0]! : ref.slug.replace(/^eu\//, "");
+  const key = raw.toLowerCase().replace(/[^a-z0-9]/g, "");
+  if (key.length < 2) return false;
+  return nameVariants(companyName).some((tokens) => {
+    const core = tokens.filter((t) => !NAME_NOISE.has(t));
+    const full = tokens.join("");
+    // The full name plus a suffix ("razorpaysoftwareprivatelimited") once it's long enough to be
+    // distinctive; without noise words ("Pine Labs" → "pine") only an exact match counts.
+    if (key === full || (full.length >= 4 && key.startsWith(full))) return true;
+    if (core.length > 0 && key === core.join("")) return true;
+    if (core[0] && core[0].length >= 4 && key === core[0]) return true;
+    return core.length >= 2 && key === core.map((t) => t[0]).join("");
+  });
 }
 
 const INDIA_PLACES = [
@@ -82,10 +128,22 @@ const TECH_RE =
 const NOT_TECH_RE =
   /\b(sales|account executive|account manager|marketing|recruit\w*|talent|human resources|hr|finance|financial|accounting|accountant|legal|counsel|business development|customer success|content|copywrit\w*|social media|graphic|procurement|supply chain|payroll|administrat\w*|operations|settlements?|treasury|audit\w*|compliance|writer|industrial|mechanical|civil|chemical|manufacturing)\b/i;
 
-/** Technical roles only: SDE, backend, frontend, full stack, AI/ML, data, DevOps, security, mobile, hardware. */
+/** Early-career programs whose titles often name no field ("(IND) Grad Intern - No Work Experience"). */
+const EARLY_PROGRAM_RE =
+  /\b(intern|interns|internship|internships|apprentice|apprentices|apprenticeship|grad|grads|graduate|graduates|new grad\w*|trainee|trainees|fresher|freshers|campus|co ?op|summer analyst)\b/i;
+/** Business programs that name no tech word, so only NOT_TECH_RE would miss them. */
+const NOT_TECH_PROGRAM_RE =
+  /\b(growth|strategy|customer support|customer service|brand|events?|community|retail|store|warehouse|cafe|merchandis\w*|category|hospitality|nursing|pharmacy|driver|logistics)\b/i;
+
+/**
+ * Technical roles: SDE, backend, frontend, full stack, AI/ML, data, DevOps, security,
+ * mobile, hardware. Intern, apprentice and graduate programs count too when the title
+ * names no field, since those are often tech; business programs are still left out.
+ */
 export function isTechRole(title: string): boolean {
   const t = title.replace(/[-_/]+/g, " ");
-  return TECH_RE.test(t) && !NOT_TECH_RE.test(t);
+  if (NOT_TECH_RE.test(t)) return false;
+  return TECH_RE.test(t) || (EARLY_PROGRAM_RE.test(t) && !NOT_TECH_PROGRAM_RE.test(t));
 }
 
 const INTERN_RE = /\b(intern|interns|internship|internships|apprentice|apprenticeship|co ?op|industrial trainee)\b/i;

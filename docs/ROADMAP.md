@@ -27,6 +27,13 @@ Ideas not built yet, with the research they come from. Current status lives in `
 | **Job-alert emails** (LinkedIn, Internshala, Naukri) | Those sites forbid crawling but email alerts to the user | Read-only Gmail → openings | User hasn't decided; needs an extra Google scope |
 | **HN "Who's Hiring"** via Algolia API | ~5 India-open roles a month, mostly senior | Low priority | |
 
+## From the intern-list.com / Jobright.ai analysis (2026-10-25, DECISIONS #23)
+| Idea | Why | Fits the app how | Constraints |
+|---|---|---|---|
+| **Description check for openings** (Jobright's "AI step", cut down) | 496 of 745 open openings (67%, 2026-10-25) are UNSPECIFIED: the title names no level, and many are experienced roles (Salesforce "LMTS"). Only the description says "3+ years" or "2026 batch only" | Fetch descriptions for new UNSPECIFIED/ambiguous roles (Lever, Ashby: already in the list call; Greenhouse: `?content=true`; Workday, SmartRecruiters: one request per job) → regex rules in `core` for years of experience, batch/graduation year, stipend → AI only for what rules can't settle → result in `job_posting.extra` (no migration) → "Experienced" hidden by default, eligibility badge | Free tiers: one-time ~500 backlog, then ~10–60 roles/day, 15–20 per AI call ≈ 1–5 calls/day. Use the lite fallback model or Groq so message drafting keeps the main Gemini quota; background after a scan, never blocking; one batched write |
+| Not worth copying from Jobright | Skill-match scores, summaries, H-1B/clearance/citizen flags, USD salary normalization, employee "connections" | Discovery already finds referrers (alumni first); the user reads the description when adding the job | |
+| **Board finder on job add** | `board-finder.ts` works per company; companies the user targets later aren't watched unless their job link is an ATS link | When a job's company has no watched board, run the finder in the background | ~1–3 Serper searches per new company; needs a `BoardOrigin` value (`SEARCH`) + migration |
+
 ## Earlier backlog
 - Fix known issues (see PROGRESS).
 - Settings page (caps, weights, sign-off), data export / delete account.

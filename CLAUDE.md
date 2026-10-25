@@ -33,6 +33,7 @@ pnpm monorepo, TypeScript everywhere · **web**: Next.js 16 (App Router), React 
 - State machine (`packages/core/src/outreach/machine.ts`) is the source of truth for pipeline state; UI updates optimistically using the same function.
 - Discovery never invents people or schools: candidates must come from a real search result showing the company in the Experience field or title (`discovery/verify.ts`).
 - Interns are never referral targets; max 3 recruiters in a top 15.
+- Job boards come only from real links (seed, user's job URLs, aggregator apply links, search results) and a search-found board must match the company and answer (`board-finder.ts`, `core/postings.ts` `boardMatchesCompany`); never guess slugs from names.
 
 ## Live
 https://referral-copilot.onrender.com · GitHub `Praveen-here/referral.copilot` (`main`, auto-deploys to Render) · Neon branch `production` (only branch).

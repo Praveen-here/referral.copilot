@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { boardFromUrl, isIndiaLocation, isNewOpening, isTechRole, openingKey, parseRelativePosted, postingLevel } from "../src";
+import { boardFromUrl, boardMatchesCompany, isIndiaLocation, isNewOpening, isTechRole, openingKey, parseRelativePosted, postingLevel } from "../src";
 
 const NOW = new Date("2026-10-24T10:00:00Z");
 const HOUR = 3_600_000;
@@ -25,11 +25,38 @@ describe("boardFromUrl", () => {
     expect(boardFromUrl("https://www.amazon.jobs/en/jobs/10498382/sde-intern")).toEqual({ ats: "amazon", slug: "amazon", jobId: "10498382" });
   });
 
+  it("skips a bare language prefix on Workday links", () => {
+    expect(boardFromUrl("https://micron.wd1.myworkdayjobs.com/es/External/job/Hyderabad/Intern_JR123")).toMatchObject({ slug: "micron.wd1/External" });
+  });
+
   it("ignores hosts without a public feed", () => {
     expect(boardFromUrl("https://wayfair.avature.net/careers?folderId=20829")).toBeNull();
     expect(boardFromUrl("https://docs.google.com/forms/d/abc")).toBeNull();
     expect(boardFromUrl("https://www.linkedin.com/jobs/view/123")).toBeNull();
     expect(boardFromUrl("not a url")).toBeNull();
+  });
+});
+
+describe("boardMatchesCompany", () => {
+  const wd = (slug: string) => ({ ats: "workday" as const, slug });
+
+  it("accepts the company's own tenant or slug", () => {
+    expect(boardMatchesCompany(wd("walmart.wd504/WalmartExternal"), "Walmart Global Tech")).toBe(true);
+    expect(boardMatchesCompany(wd("wf.wd1/WellsFargoJobs"), "Wells Fargo")).toBe(true);
+    expect(boardMatchesCompany(wd("qualcomm.wd12/External"), "Qualcomm")).toBe(true);
+    expect(boardMatchesCompany({ ats: "greenhouse", slug: "razorpaysoftwareprivatelimited" }, "Razorpay")).toBe(true);
+    expect(boardMatchesCompany({ ats: "lever", slug: "dreamsports" }, "Dream Sports (Dream11)")).toBe(true);
+    expect(boardMatchesCompany({ ats: "ashby", slug: "promptql" }, "Hasura (now PromptQL)")).toBe(true);
+    expect(boardMatchesCompany({ ats: "lever", slug: "eu/revrag" }, "RevRag.AI")).toBe(true);
+  });
+
+  it("rejects other companies' boards that mention this one", () => {
+    expect(boardMatchesCompany(wd("avnet.wd1/External"), "AMD")).toBe(false);
+    expect(boardMatchesCompany(wd("hpe.wd5/Jobsathpe"), "Broadcom")).toBe(false);
+    expect(boardMatchesCompany(wd("kyndryl.wd5/KyndrylProfessionalCareers"), "IBM")).toBe(false);
+    expect(boardMatchesCompany(wd("onehealthineers.wd3/SHSJB"), "Siemens")).toBe(false);
+    expect(boardMatchesCompany({ ats: "greenhouse", slug: "olaplex" }, "Ola / Krutrim")).toBe(false);
+    expect(boardMatchesCompany({ ats: "greenhouse", slug: "pinecone" }, "Pine Labs")).toBe(false);
   });
 });
 
@@ -55,6 +82,14 @@ describe("isTechRole", () => {
   });
   it("drops business roles", () => {
     for (const t of ["Financial Analyst Intern", "Sales Engineer", "Talent Acquisition Intern", "Apprentice Operations India 2026", "Account Executive", "Security Settlements_ Associate_Core Services", "Associate Technical Writer", "Associate Industrial Engineer"])
+      expect(isTechRole(t), t).toBe(false);
+  });
+  it("keeps intern, apprentice and graduate programs that name no field", () => {
+    for (const t of ["(IND) Grad Intern - No Work Experience", "Intern", "Apprenticeship Program 2027", "Graduate Trainee", "Summer Analyst 2027", "Campus Hire 2026", "Co-op, Fall 2027"])
+      expect(isTechRole(t), t).toBe(true);
+  });
+  it("still drops business programs", () => {
+    for (const t of ["Growth Intern", "HR Intern Mumbai", "Cafe Strategy Intern", "Customer Support Intern", "Graduate Sales Trainee", "Marketing Apprentice"])
       expect(isTechRole(t), t).toBe(false);
   });
 });

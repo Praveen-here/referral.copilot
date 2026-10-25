@@ -53,6 +53,7 @@ No browser/E2E tests in the repo yet (earlier ad-hoc Playwright runs used a DB-c
 - While the app is closed: cron-job.org (user's free account) job **Referral Copilot scan** → `GET https://referral-copilot.onrender.com/api/cron/openings`, every 2 hours (`0 */2 * * *`, UTC), header `x-cron-key: <CRON_SECRET>`, "Save responses in job history" on. Expected response: 202 `{"scanning":true}` (or `false` if a scan ran <30 min ago); 404 = secret mismatch or deploy not live.
 - `CRON_SECRET` is set on Render only (not needed locally). To change it, update Render **and** the cron-job.org header.
 - Run a scan by hand locally: a throwaway tsx script that imports `./env` then calls `scanOpenings()` from `services/openings` (writes only to `job_board`/`job_posting`).
+- Find boards for companies the seed list lacks: `pnpm --filter @rc/api exec tsx src/scripts/find-boards.ts [csv]` (default: the research CSV). One Serper search per job system tried; prints verified boards as `SEED_BOARDS` lines to review; reads no database.
 
 ## Safe migrations (one shared production DB)
 There is no dev database, so `prisma migrate dev` is risky (it can offer to reset the DB on drift). Instead:

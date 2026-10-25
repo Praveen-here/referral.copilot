@@ -234,7 +234,7 @@ async function workday(board: Board): Promise<FeedResult> {
   const tenant = hostPart!.split(".")[0];
   const base = `https://${hostPart}.myworkdayjobs.com`;
   const seen = new Map<string, FeedPosting>();
-  for (const searchText of ["intern India", "graduate India", "engineer India"]) {
+  for (const searchText of ["intern India", "apprentice India", "graduate India", "engineer India"]) {
     const data = await getJson<{ jobPostings?: Job[] }>(`${base}/wday/cxs/${tenant}/${site}/jobs`, {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -265,7 +265,7 @@ async function workday(board: Board): Promise<FeedResult> {
 async function amazon(board: Board): Promise<FeedResult> {
   type Job = { id_icims: string; title: string; city?: string; posted_date?: string; job_path: string; is_intern?: boolean; university_job?: boolean };
   const seen = new Map<string, FeedPosting>();
-  for (const q of ["intern", "software development engineer", ""]) {
+  for (const q of ["intern", "apprentice", "software development engineer", ""]) {
     const data = await getJson<{ jobs: Job[] }>(
       `https://www.amazon.jobs/en/search.json?base_query=${encodeURIComponent(q)}&country=IND&result_limit=100&sort=recent`,
     );
@@ -323,7 +323,9 @@ async function debugWithShubham(): Promise<FeedResult> {
       const ref = boardFromUrl(j.apply_url);
       if (ref && ref.ats !== "amazon") boards.set(`${ref.ats}:${ref.slug}`, { ...ref, companyName: company });
       if (!isTechRole(j.role)) return null;
-      const level = j.job_type === "Internship" ? "INTERN" : postingLevel(j.role) && "ENTRY";
+      // Everything on this list is for freshers, so a title naming no level counts as entry.
+      const titleLevel = postingLevel(j.role);
+      const level = j.job_type === "Internship" || titleLevel === "INTERN" ? "INTERN" : titleLevel && "ENTRY";
       if (!level) return null;
       return {
         externalId: j.id,
