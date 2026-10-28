@@ -1,8 +1,8 @@
 # Progress
-_Last updated: 2026-10-26. Keep this file short; replace, don't append._
+_Last updated: 2026-10-28. Keep this file short; replace, don't append._
 
 ## Status
-Live at https://referral-copilot.onrender.com (Render, auto-deploys from `main`). Used for real outreach. Database = Neon `production` branch (fresh: earlier data on the deleted `dev` branch was lost 2026-10-21; user re-adding jobs). Last push: board finder + 10 boards + intern/apprentice/grad filter (2026-10-26).
+Live at https://referral-copilot.onrender.com (Render, auto-deploys from `main`). Used for real outreach. Database = Neon `production` branch (fresh: earlier data on the deleted `dev` branch was lost 2026-10-21; user re-adding jobs). Last push: favicon on a white rounded tile (`939d464`, 2026-10-26), after board finder + 10 boards + intern/apprentice/grad filter (`fa396c3`).
 
 ## Done
 - Google login; profile (college, degree, semester, fit line, skills, resume link, sign-off)
@@ -13,7 +13,7 @@ Live at https://referral-copilot.onrender.com (Render, auto-deploys from `main`)
 - AI-written messages in the user's reference style (Gemini → fallback models → Groq → template), Rewrite (shorter/warmer/formal/fresh), recruiter intro
 - Paste a reply → outcome, suggested status, drafted answer
 - Today page, invite budget (15/day, 100/week), Ctrl+K people search with inline "Accepted", sample data
-- Mobile: bottom tab bar, `/companies`, bottom sheets, 16px inputs, safe areas; logo/favicon
+- Mobile: bottom tab bar, `/companies`, bottom sheets, 16px inputs, safe areas; logo/favicon (tab icon `app/icon.png` = plane on a white rounded tile since 2026-10-26, so it shows on dark tabs; made from `public/logo.png`)
 - **Openings / early job alerts (2026-10-24)**: `/openings` page (New / Interns / Entry level / All, "Check now") + "New openings" on Today + sidebar link; one click "Find people" → job + discovery; hide with undo. 7 feed readers (Greenhouse, Lever, Ashby, SmartRecruiters, Workday, amazon.jobs, debugwithshubham.com). 123 boards watched at launch (88 seed + 35 auto-added from aggregator apply links; 98 seed after 2026-10-25); first scans found ~440 open India tech roles, ~78 intern, ~76 entry. "New" counts only intern/entry.
 - **Scans while the app is closed**: cron-job.org job "Referral Copilot scan" calls `GET /api/cron/openings` every 2 h (UTC schedule) with `x-cron-key`; `CRON_SECRET` set on Render; test run returned 202 `{"scanning":true}` (2026-10-24).
 - **Board finder (2026-10-25)**: `services/board-finder.ts` finds a company's Workday/Greenhouse/Lever/Ashby board via `site:` search, keeps it only if tenant/slug matches the company and the feed answers (DECISIONS #23). One run over the research CSV added 10 seed boards (Micron, Broadcom, Cisco, Walmart Global Tech, Wells Fargo, Expedia, Visa, Emergent, Paytm Payments). Intern/apprentice/grad programs whose title names no field are now kept unless they name a business function (Walmart "(IND) Grad Intern - No Work Experience"); Workday and Amazon readers also search "apprentice". intern-list.com reverse-engineered: Jobright's US-only index in Airtable, nothing for India.
