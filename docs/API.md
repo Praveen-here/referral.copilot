@@ -35,5 +35,5 @@ Express, all under `/api/v1` (session required, scoped to `res.locals.userId`), 
 
 Outside `/api/v1`: GET/POST `/api/cron/openings` with header `x-cron-key: $CRON_SECRET` (or `?key=`) starts a scan if the last is >30 min old; 404 when `CRON_SECRET` is unset.
 
-Web pages (`apps/web/app`): `/login`, `/` (Today, with a "New openings" section), `/openings`, `/companies` (list, used on phones), `/companies/[id]?job=&tab=&person=` (job pipeline; `person` scrolls+highlights), `/profile`, `/healthz`.
+Web pages (`apps/web/app`): `/login`, `/` (Today, with a "New openings" section), `/openings`, `/companies` (list, used on phones), `/companies/[id]?job=&tab=&person=` (job pipeline; `person` scrolls+highlights), `/profile`, `/healthz`, `/manifest.webmanifest` (from `app/manifest.ts`: standalone home-screen app, icons in `public/icons/`).
 Key components: `app-shell` (sidebar/tab bar + search + new-job sheets), `person-row`, `message-card`, `chat-sheet`, `paste-people-sheet`, `discovery-panel`, `search-palette`, `feedback` (toast + "sent?" prompt).

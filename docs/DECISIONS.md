@@ -102,3 +102,7 @@ Format: **Decision** / Reason / Consequence. Newest last.
 25. **Badge = messages waiting to be sent; conversations live in a chat sheet; nothing asks the user to check.** (user, 2026-10-29)
     Checks and follow-up reminders piled up. A badge that means one thing ("N messages written, just send them") is actionable; cleanup items are never urgent so they don't count.
     `readyToSend` (core) drives the badge and Today's "Messages ready". Awaiting reply groups by `conversationGroup` (Talking / Waiting / Gone quiet after 14 silent days; display only, no state writes). Follow-ups only on "Nudge" and from the template (no AI call). Replies are pasted into a per-person chat; the AI sees the last 10 messages; "I sent something else" keeps the thread true when the user writes their own message.
+
+26. **Home-screen app opens `standalone`, not `fullscreen`.** (user, 2026-10-29: "opens full-screen and the website url isn't visible")
+    `standalone` hides the address bar and tabs but keeps the phone's status bar (clock, battery), like a normal app; `fullscreen` would hide that too.
+    `app/manifest.ts` + `public/icons/` (192, 512, maskable 512, cut from `docs/brand/logo-source.png` on pure white); iPhones also use `appleWebApp` in `app/layout.tsx`. Existing home-screen shortcuts must be removed and re-added to pick it up.
