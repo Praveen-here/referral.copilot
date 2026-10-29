@@ -6,8 +6,8 @@ Express, all under `/api/v1` (session required, scoped to `res.locals.userId`), 
 |---|---|---|
 | GET `/me` | User, profile, college, onboarded flag | routes |
 | PUT `/me/profile` | Save profile (college → `education`, fit line → `projects[0].oneLiner`, sign-off → `settings`) | routes |
-| GET `/sidebar` | Active companies + attention counts (also the phone Companies page) | views |
-| GET `/today` | Messages ready, follow-ups, reply/acceptance checks, cleanup + invite budget | views |
+| GET `/sidebar` | Active companies + attention counts (only messages ready + cleanup kinds, matching Today) (also the phone Companies page) | views |
+| GET `/today` | Messages ready, follow-ups, reply/acceptance checks, cleanup + invite budget (the Today page shows only messages ready + cleanup) | views |
 | GET `/invite-budget` | Requests sent today/week vs caps (15/100) | views |
 | GET `/search?q=` | People by name across all jobs (Ctrl+K) | routes |
 | GET / DELETE `/companies/:id` | Company with jobs / delete (cascades) | views |

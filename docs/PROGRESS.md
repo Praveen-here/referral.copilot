@@ -1,5 +1,5 @@
 # Progress
-_Last updated: 2026-10-28. Keep this file short; replace, don't append._
+_Last updated: 2026-10-29. Keep this file short; replace, don't append._
 
 ## Status
 Live at https://referral-copilot.onrender.com (Render, auto-deploys from `main`). Used for real outreach. Database = Neon `production` branch (fresh: earlier data on the deleted `dev` branch was lost 2026-10-21; user re-adding jobs). Last push: favicon on a white rounded tile (`939d464`, 2026-10-26), after board finder + 10 boards + intern/apprentice/grad filter (`fa396c3`).
@@ -13,6 +13,7 @@ Live at https://referral-copilot.onrender.com (Render, auto-deploys from `main`)
 - AI-written messages in the user's reference style (Gemini → fallback models → Groq → template), Rewrite (shorter/warmer/formal/fresh), recruiter intro
 - Paste a reply → outcome, suggested status, drafted answer
 - Today page, invite budget (15/day, 100/week), Ctrl+K people search with inline "Accepted", sample data
+- **Today trimmed (2026-10-29, user)**: "Follow-ups due", "Check for replies" and "Check if accepted" removed from Today (they piled up; per-person checking is too much work). Today shows only Messages ready + Clean up; sidebar badges count the same kinds. `/today` still returns all groups and the pipeline tabs are unchanged (DECISIONS #24)
 - Mobile: bottom tab bar, `/companies`, bottom sheets, 16px inputs, safe areas; logo/favicon (tab icon `app/icon.png` = plane on a white rounded tile since 2026-10-26, so it shows on dark tabs; made from `public/logo.png`)
 - **Openings / early job alerts (2026-10-24)**: `/openings` page (New / Interns / Entry level / All, "Check now") + "New openings" on Today + sidebar link; one click "Find people" → job + discovery; hide with undo. 7 feed readers (Greenhouse, Lever, Ashby, SmartRecruiters, Workday, amazon.jobs, debugwithshubham.com). 123 boards watched at launch (88 seed + 35 auto-added from aggregator apply links; 98 seed after 2026-10-25); first scans found ~440 open India tech roles, ~78 intern, ~76 entry. "New" counts only intern/entry.
 - **Scans while the app is closed**: cron-job.org job "Referral Copilot scan" calls `GET /api/cron/openings` every 2 h (UTC schedule) with `x-cron-key`; `CRON_SECRET` set on Render; test run returned 202 `{"scanning":true}` (2026-10-24).
@@ -35,6 +36,7 @@ Live at https://referral-copilot.onrender.com (Render, auto-deploys from `main`)
 - Openings: Workday gives only relative dates ("Posted 30+ Days Ago" → approximate); Workday/Amazon/big SmartRecruiters boards are searched, not fully listed, so their roles are never marked closed; a posting's title/location isn't refreshed after first seen; "UNSPECIFIED" level (no level in title) is 496 of 745 open openings and includes many experienced roles (fix: ROADMAP "Description check"); feed readers have no unit tests (filters in `core/postings.ts` do); Lever `aprio` 404s (auto-deactivates after 3 failed scans)
 
 ## Next
+0. Replace per-person checks with "share to app" (proposed 2026-10-29, waiting for user, who must say Android or iPhone): tap LinkedIn's acceptance push notification → profile → Share → Referral Copilot (Android: PWA `share_target`; iPhone: Apple Shortcut opening the app with `?url=`) → match contact by LinkedIn URL → Accepted + draft ready. Replies: copy the message → existing reply paste. Laptop: paste a profile URL into Ctrl+K. Follow-up cards say "if they replied, tap Replied"
 1. Description check for openings (ROADMAP, proposed 2026-10-25; waiting for user go-ahead)
 2. Paste-a-hiring-post (LinkedIn/X post → job, poster as top contact) + scam check (ROADMAP, research report "Social channels")
 3. Funded-startup tracker from news RSS (Inc42 `/buzz/feed/`, Entrackr `/rss`, YourStory, ET Tech)

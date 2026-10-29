@@ -20,7 +20,7 @@ Modular monolith: one API process, no queue/worker, no Redis. Background work (d
 | `services/messages` | `generateDraft`: facts → Gemini writes → code checks → one corrective retry → template fallback; Rewrite styles; in-flight dedupe |
 | `services/replies` | `readReply`: AI classifies a pasted reply → suggested event + outcome-specific draft (thank-you / resume / answer) |
 | `services/discovery` (paste) | `addPastedPeople`: AI extracts people from a copied LinkedIn page, every value must appear verbatim, then the same verify/rank/save as web results |
-| `services/views` | Read models: sidebar, job detail, Today, invite budget |
+| `services/views` | Read models: sidebar, job detail, Today, invite budget. Today page and sidebar badges show only messages ready + cleanup (no follow-up/check items, DECISIONS #24) |
 | `packages/core` | All decision logic (pure, unit-tested) |
 | `packages/ai` | `runTask`: JSON-schema output → Zod validate → one repair retry → next provider |
 

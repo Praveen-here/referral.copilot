@@ -70,6 +70,8 @@ function serialize(row: OutreachRow, now: Date) {
   };
 }
 
+const TODAY_KINDS: string[] = ["MESSAGE_READY", "WITHDRAW_SUGGESTED", "NO_RESPONSE_SUGGESTED"];
+
 /** Companies with active jobs, plus how many people need attention in each. */
 export async function sidebar(userId: string) {
   const now = new Date();
@@ -88,9 +90,13 @@ export async function sidebar(userId: string) {
     name: c.name,
     isSample: c.isSample,
     jobs: c.jobs.map((j) => ({ id: j.id, title: j.title })),
+    // Count only what Today shows (follow-ups and checks were removed from Today).
     attentionCount: c.jobs
       .flatMap((j) => j.outreach)
-      .filter((o) => attentionFor(o as unknown as OutreachSnapshot & { stateChangedAt: Date }, now)).length,
+      .filter((o) => {
+        const a = attentionFor(o as unknown as OutreachSnapshot & { stateChangedAt: Date }, now);
+        return a !== null && TODAY_KINDS.includes(a.kind);
+      }).length,
   }));
 }
 

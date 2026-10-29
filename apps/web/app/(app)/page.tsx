@@ -27,9 +27,6 @@ export default function TodayPage() {
   const sections: { title: string; hint: string; items: Person[] }[] = today
     ? [
         { title: "Messages ready", hint: "They accepted. Copy the message and send it.", items: today.messageReady },
-        { title: "Follow-ups due", hint: "No reply after a few days. A short nudge is ready.", items: today.followUps },
-        { title: "Check for replies", hint: "Open their LinkedIn and record what happened.", items: today.checkReplies },
-        { title: "Check if accepted", hint: "Open their profile. See a Message button? They accepted.", items: today.checkAccepted },
         { title: "Clean up", hint: "Old invites and quiet threads worth closing.", items: today.cleanup },
       ].filter((s) => s.items.length > 0)
     : [];
@@ -88,7 +85,7 @@ export default function TodayPage() {
         </div>
       ) : (
         <div className="mt-12 rounded-sheet border border-line">
-          <EmptyState icon={<Sun size={20} />} title="All caught up" body="When someone accepts, replies, or needs a follow-up, it shows up here." />
+          <EmptyState icon={<Sun size={20} />} title="All caught up" body="Messages ready to send and old invites worth closing show up here." />
         </div>
       )}
 
