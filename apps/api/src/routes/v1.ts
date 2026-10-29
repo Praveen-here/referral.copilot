@@ -7,13 +7,13 @@ import { HttpError, notFound } from "../http/errors";
 import { addPastedPeople, latestDiscovery, startDiscovery } from "../services/discovery";
 import { ensureAnalysis, readJobPosting } from "../services/jobs";
 import { generateDraft, getOrWriteDraft } from "../services/messages";
-import { readReply } from "../services/replies";
+import { getConversation, logOwnMessage, readReply } from "../services/replies";
 import { searchConfigured } from "../services/search";
 import { applyEvent, undoLastEvent } from "../services/outreach";
 import { addOpening, dismissOpening, listOpenings, maybeStartScan, undismissOpening, watchBoardFromUrl } from "../services/openings";
 import { addPersonToJob, findOrCreateCompany } from "../services/people";
 import { createSampleData, removeSampleData } from "../services/sample";
-import { companyDetail, inviteBudget, jobDetail, sidebar, today } from "../services/views";
+import { companyDetail, inviteBudget, jobDetail, personDetail, sidebar, today } from "../services/views";
 
 export const v1 = Router();
 
@@ -239,8 +239,21 @@ const draftKind = z.enum(["REFERRAL_REQUEST", "FOLLOW_UP_1", "FOLLOW_UP_2", "RES
 
 /** Returns the open draft of this kind, AI-writing one if needed (template if the AI is down). */
 v1.post("/outreach/:id/drafts", async (req, res) => {
-  const { template } = z.object({ template: draftKind }).parse(req.body);
-  res.json(await getOrWriteDraft(res.locals.userId, id(req.params.id), template));
+  const { template, writer } = z.object({ template: draftKind, writer: z.enum(["ai", "template"]).default("ai") }).parse(req.body);
+  res.json(await getOrWriteDraft(res.locals.userId, id(req.params.id), template, writer));
+});
+
+/** The chat thread with one person: sent messages, their pasted replies, the open draft. */
+v1.get("/outreach/:id/messages", async (req, res) => {
+  const [person, messages] = await Promise.all([personDetail(res.locals.userId, id(req.params.id)), getConversation(res.locals.userId, id(req.params.id))]);
+  res.json({ person, messages });
+});
+
+/** "I sent something else": log the user's own message instead of the draft. */
+v1.post("/outreach/:id/messages", async (req, res) => {
+  const { text } = z.object({ text: z.string().trim().min(1).max(4000) }).parse(req.body);
+  await logOwnMessage(res.locals.userId, id(req.params.id), text);
+  res.status(204).end();
 });
 
 /** User pasted the person's LinkedIn reply: read it, suggest the status, draft an answer. */

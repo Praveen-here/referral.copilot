@@ -97,4 +97,8 @@ Format: **Decision** / Reason / Consequence. Newest last.
 
 24. **No automatic acceptance/reply checking; Today drops follow-ups and checks.** (user, 2026-10-29)
     Checking each profile by hand piled up. Researched alternatives: LinkedIn's Invitations and Messages APIs are partner-only; unofficial APIs (Unipile, Linked API) and having the app open profiles in the user's session are scraping under User Agreement §8.2, are easy to detect (regular repeat profile views) and show up in the recipient's "Who viewed your profile"; LinkedIn sued Proxycurl (shut July 2025) and ProAPIs (Oct 2025). Acceptance emails are not sent for every acceptance and no setting forces them (only in-app/push notifications are reliable). Copy-pasting the Connections page doesn't work on mobile.
-    Today shows only Messages ready and Clean up; sidebar `attentionCount` counts the same kinds (`TODAY_KINDS` in `services/views.ts`). Proposed next: user shares the profile from LinkedIn's acceptance notification to the app (PROGRESS Next #0).
+    Today shows only Messages ready and Clean up. Proposed next: user shares the profile from LinkedIn's acceptance notification to the app (PROGRESS Next #0).
+
+25. **Badge = messages waiting to be sent; conversations live in a chat sheet; nothing asks the user to check.** (user, 2026-10-29)
+    Checks and follow-up reminders piled up. A badge that means one thing ("N messages written, just send them") is actionable; cleanup items are never urgent so they don't count.
+    `readyToSend` (core) drives the badge and Today's "Messages ready". Awaiting reply groups by `conversationGroup` (Talking / Waiting / Gone quiet after 14 silent days; display only, no state writes). Follow-ups only on "Nudge" and from the template (no AI call). Replies are pasted into a per-person chat; the AI sees the last 10 messages; "I sent something else" keeps the thread true when the user writes their own message.

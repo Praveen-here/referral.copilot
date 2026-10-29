@@ -17,6 +17,7 @@ import {
 import { prisma, type MessageKind } from "@rc/db";
 import { HttpError, notFound } from "../http/errors";
 import { runAi } from "./ai";
+import { ensureDraft } from "./outreach";
 
 export type DraftKind = TemplateKind | "REPLY_RESPONSE";
 
@@ -127,7 +128,8 @@ async function writeDraft(
     select: { body: true },
   });
   const avoidPhrases = recent.map((m) => m.body.split(/\s+/).slice(0, 8).join(" "));
-  const conversation = o.messages.slice(-4).map((m) => `${m.kind === "INBOUND_REPLY" ? recipient : "You"}: ${m.body}`);
+  // The last ~10 messages, so the answer remembers what was said earlier in the thread.
+  const conversation = o.messages.slice(-10).map((m) => `${m.kind === "INBOUND_REPLY" ? recipient : "You"}: ${m.body}`);
 
   const check = (body: string) => {
     const issues = validateMessage(body, {
@@ -217,8 +219,11 @@ function ordinal(n: number) {
   return `${n}${s}`;
 }
 
-/** Returns the open draft of this kind, writing one with the AI if there isn't one. */
-export async function getOrWriteDraft(userId: string, outreachId: string, kind: DraftKind) {
+/**
+ * Returns the open draft of this kind, writing one with the AI if there isn't one.
+ * `writer: "template"` skips the AI (follow-up nudges: short, and often never sent).
+ */
+export async function getOrWriteDraft(userId: string, outreachId: string, kind: DraftKind, writer: "ai" | "template" = "ai") {
   const outreach = await prisma.outreach.findFirst({ where: { id: outreachId, userId }, select: { id: true } });
   if (!outreach) throw notFound("Outreach");
   const existing = await prisma.message.findFirst({
@@ -227,5 +232,6 @@ export async function getOrWriteDraft(userId: string, outreachId: string, kind: 
   });
   if (existing) return existing;
   if (kind === "REPLY_RESPONSE") throw notFound("Draft");
+  if (writer === "template") return prisma.$transaction((tx) => ensureDraft(tx, userId, outreachId, kind));
   return generateDraft(userId, outreachId, kind);
 }

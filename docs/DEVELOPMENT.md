@@ -20,7 +20,7 @@
 | Regenerate client | `pnpm db:generate` (output `packages/db/generated/`, git-ignored) |
 | DB browser | `pnpm db:studio` |
 
-No browser/E2E tests in the repo yet (earlier ad-hoc Playwright runs used a DB-created test session and lived outside the repo).
+No browser/E2E tests in the repo yet. Ad-hoc runs (2026-10-29: puppeteer-core + Edge headless) use a temporary DB session row for the single account (2 h expiry, cookie `better-auth.session_token` = token signed with `BETTER_AUTH_SECRET`), load sample data via `POST /api/v1/sample-data`, and delete both afterwards. Ask the user first: it signs in as them on the shared production DB.
 
 ## Environment (`.env`, repo root; names only)
 | Var | Meaning |

@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "motion/react";
-import { Check, ExternalLink, GraduationCap, MoreHorizontal } from "lucide-react";
+import { Check, ExternalLink, GraduationCap, MessageCircle, MoreHorizontal } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { OutreachEvent, TemplateKind } from "@rc/core";
@@ -9,10 +9,11 @@ import { api } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { openInNewTab, profileLink } from "@/lib/linkedin";
 import { useOutreachEvent, useRefreshPipeline } from "@/lib/queries";
+import { CONVERSING, draftFor } from "@/lib/drafts";
 import type { Person } from "@/lib/types";
+import { useShell } from "./app-shell";
 import { useFeedback } from "./feedback";
-import { MessageCard, type DraftKind } from "./message-card";
-import { ReplySheet } from "./reply-sheet";
+import { MessageCard } from "./message-card";
 import { Avatar, Badge, Button, spring } from "./ui";
 
 const daysAgo = (iso: string | null) => {
@@ -32,25 +33,6 @@ const RESULT: Partial<Record<Person["state"], { label: string; tone: "green" | "
   STOPPED: { label: "Stopped", tone: "neutral" },
 };
 
-const OPTIONAL_DRAFTS = ["THANK_YOU", "THANKS_ANYWAY", "RESUME_SHARE", "REPLY_RESPONSE"] as const;
-const CONVERSING: Person["state"][] = ["AWAITING_REPLY", "IN_CONVERSATION"];
-
-/** Which draft this person needs right now, and what "sent" means for it. */
-function draftFor(p: Person): { template: DraftKind; sentEvent: OutreachEvent | null; optional: boolean } | null {
-  // A drafted answer to their reply comes first: it's the most recent thing to act on.
-  const kind = p.draft?.kind as (typeof OPTIONAL_DRAFTS)[number] | undefined;
-  if (kind && OPTIONAL_DRAFTS.includes(kind)) {
-    // Answers that keep the conversation going move it to "awaiting reply"; thank-yous don't change state.
-    const continues = (kind === "RESUME_SHARE" || kind === "REPLY_RESPONSE") && CONVERSING.includes(p.state);
-    return { template: kind, sentEvent: continues ? "MESSAGE_SENT" : null, optional: true };
-  }
-  if (p.state === "ACCEPTED_MESSAGE_READY") return { template: "REFERRAL_REQUEST", sentEvent: "MESSAGE_SENT", optional: false };
-  if (p.attention?.kind === "FOLLOWUP_DUE") {
-    return { template: p.attention.followupNumber === 1 ? "FOLLOW_UP_1" : "FOLLOW_UP_2", sentEvent: "FOLLOWUP_SENT", optional: false };
-  }
-  return null;
-}
-
 export function PersonRow({
   person,
   companyName,
@@ -66,7 +48,9 @@ export function PersonRow({
   const event = useOutreachEvent();
   const refresh = useRefreshPipeline();
   const { askOnReturn } = useFeedback();
-  const draft = draftFor(person);
+  const { openChat } = useShell();
+  const [nudging, setNudging] = useState(false);
+  const draft = draftFor(person, { nudging });
   const first = person.contact.fullName.split(" ")[0]!;
   const isSample = person.contact.source === "SAMPLE";
 
@@ -78,10 +62,11 @@ export function PersonRow({
   };
 
   const createDraft = (template: TemplateKind) => api(`/outreach/${person.id}/drafts`, { method: "POST", json: { template } }).then(refresh);
-  const [readingReply, setReadingReply] = useState(false);
 
   const result = RESULT[person.state];
   const compactActions = person.state === "ACCEPTED_MESSAGE_READY" || Boolean(result);
+  // An answer drafted in the chat is waiting to be sent.
+  const answerReady = person.readyToSend && CONVERSING.includes(person.state);
   // Connection and school details only matter while deciding whom to contact.
   const reasons = person.reasons.filter(
     (r) => !r.endsWith(" alum") && (person.tab === "to_connect" || (r !== "Already connected" && r !== "School unknown")),
@@ -121,6 +106,7 @@ export function PersonRow({
               </span>
             )}
             {result && <Badge tone={result.tone}>{result.label}</Badge>}
+            {answerReady && <Badge tone="blue">Answer ready</Badge>}
           </div>
           <p className="truncate text-ink-2">
             {person.contact.currentTitle ?? "Role unknown"}
@@ -151,9 +137,10 @@ export function PersonRow({
             openProfile={openProfile}
             isSample={isSample}
             createDraft={createDraft}
-            pasteReply={() => setReadingReply(true)}
+            openChat={() => openChat(person.id)}
+            answerReady={answerReady}
+            nudge={!nudging && person.attention?.kind === "FOLLOWUP_DUE" && person.draft?.kind !== "FOLLOW_UP" ? () => setNudging(true) : undefined}
           />
-          <ReplySheet person={person} open={readingReply} onClose={() => setReadingReply(false)} />
         </div>
       </div>
 
@@ -174,7 +161,10 @@ export function PersonRow({
                 companyName={companyName}
                 optional={draft.optional}
                 onSent={(messageId) => (draft.sentEvent ? fire(draft.sentEvent) : api(`/messages/${messageId}/sent`, { method: "POST" }).then(refresh))}
-                onDismiss={(messageId) => api(`/messages/${messageId}/discard`, { method: "POST" }).then(refresh)}
+                onDismiss={(messageId) => {
+                  setNudging(false);
+                  void api(`/messages/${messageId}/discard`, { method: "POST" }).then(refresh);
+                }}
               />
             </div>
           </motion.div>
@@ -189,9 +179,10 @@ function statusLine(p: Person): string | null {
     case "CONNECTION_SENT":
       return `Request sent ${daysAgo(p.stateChangedAt)}`;
     case "AWAITING_REPLY":
+      if (p.lastReplyAt) return `You replied ${daysAgo(p.lastSentAt)}`;
       return `${p.followupCount ? `Follow-up ${p.followupCount} sent` : "Messaged"} ${daysAgo(p.lastSentAt)}`;
     case "IN_CONVERSATION":
-      return "In conversation";
+      return p.lastReplyAt ? `Replied ${daysAgo(p.lastReplyAt)}` : "In conversation";
     case "ACCEPTED_MESSAGE_READY":
       return "Accepted · message ready";
     default:
@@ -209,7 +200,9 @@ function Actions({
   openProfile,
   isSample,
   createDraft,
-  pasteReply,
+  openChat,
+  answerReady,
+  nudge,
 }: {
   person: Person;
   first: string;
@@ -218,7 +211,10 @@ function Actions({
   openProfile: (afterReturn?: AfterReturn) => void;
   isSample: boolean;
   createDraft: (t: TemplateKind) => void;
-  pasteReply: () => void;
+  openChat: () => void;
+  answerReady: boolean;
+  /** Shown after 5 quiet days: opens a short template follow-up (no AI). */
+  nudge?: () => void;
 }) {
   const linkedIn = (after?: AfterReturn) => (
     <Button
@@ -269,49 +265,39 @@ function Actions({
     case "ACCEPTED_MESSAGE_READY":
       return <Menu items={[{ label: "Skip", onClick: () => fire("SKIP") }]} />;
     case "AWAITING_REPLY":
+    case "IN_CONVERSATION": {
+      // Nothing to check: when they reply on LinkedIn, open the chat and paste it.
+      const talking = person.state === "IN_CONVERSATION" || Boolean(person.lastReplyAt);
       return (
         <>
           {linkedIn()}
-          {person.attention?.kind === "NO_RESPONSE_SUGGESTED" ? (
+          {nudge && (
+            <Button size="sm" variant="ghost" onClick={nudge} title="No reply for a few days: a short follow-up">
+              Nudge
+            </Button>
+          )}
+          {person.attention?.kind === "NO_RESPONSE_SUGGESTED" && (
             <Button size="sm" onClick={() => fire("NO_RESPONSE")} disabled={busy}>
               Close: no response
             </Button>
-          ) : (
-            <Button size="sm" onClick={() => fire("NO_REPLY_YET")} disabled={busy}>
-              No reply yet
-            </Button>
           )}
-          <Menu
-            label="Replied?"
-            items={[
-              { label: "Paste their reply…", onClick: pasteReply },
-              { label: "Replied", onClick: () => fire("REPLIED") },
-              { label: "Asked for my resume", onClick: () => fire("RESUME_REQUESTED") },
-              { label: "Referred me 🎉", onClick: () => fire("REFERRED") },
-              { label: "Said no", onClick: () => fire("DECLINED") },
-              { label: "Close: no response", onClick: () => fire("NO_RESPONSE") },
-            ]}
-          />
-        </>
-      );
-    case "IN_CONVERSATION":
-      return (
-        <>
-          {linkedIn()}
-          <Button size="sm" onClick={() => fire("MESSAGE_SENT")} disabled={busy}>
-            I replied
+          {/* Blue chat icon marks the conversation; the "Answer ready" badge carries the urgency. */}
+          <Button size="sm" icon={<MessageCircle size={14} className="text-accent" />} onClick={openChat}>
+            {talking ? "Open chat" : "They replied"}
           </Button>
           <Menu
-            label="Update"
             items={[
-              { label: "Paste their reply…", onClick: pasteReply },
-              { label: "Draft: send my resume", onClick: () => createDraft("RESUME_SHARE") },
+              person.state === "IN_CONVERSATION" && { label: "I sent a reply", onClick: () => fire("MESSAGE_SENT") },
+              person.state === "IN_CONVERSATION" && { label: "Draft: send my resume", onClick: () => createDraft("RESUME_SHARE") },
+              person.state === "AWAITING_REPLY" && { label: "Asked for my resume", onClick: () => fire("RESUME_REQUESTED") },
               { label: "Referred me 🎉", onClick: () => fire("REFERRED") },
               { label: "Said no", onClick: () => fire("DECLINED") },
+              person.state === "AWAITING_REPLY" && { label: "Close: no response", onClick: () => fire("NO_RESPONSE") },
             ]}
           />
         </>
       );
+    }
     default:
       return ["SKIPPED", "DROPPED", "NO_RESPONSE", "STOPPED", "WRONG_PERSON"].includes(person.state) ? (
         <Button size="sm" variant="ghost" onClick={() => fire("REOPEN")} disabled={busy}>

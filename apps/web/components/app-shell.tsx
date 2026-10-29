@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { ChatSheet } from "./chat-sheet";
 import { MobileTabBar } from "./mobile-tab-bar";
 import { NewJobSheet } from "./new-job-sheet";
 import { SearchPalette } from "./search-palette";
@@ -9,6 +10,8 @@ import { Sidebar } from "./sidebar";
 interface ShellActions {
   openSearch: () => void;
   openNewJob: () => void;
+  /** Opens the chat thread with one person (outreach id). */
+  openChat: (outreachId: string) => void;
 }
 
 const ShellContext = createContext<ShellActions | null>(null);
@@ -26,6 +29,8 @@ export function useShell() {
 export function AppShell({ children }: { children: ReactNode }) {
   const [searching, setSearching] = useState(false);
   const [newJob, setNewJob] = useState(false);
+  // Hosted here, not in a row: the person can move between lists while the chat is open.
+  const [chatWith, setChatWith] = useState<string | null>(null);
 
   // Ctrl/Cmd+K or "/" opens people search from anywhere.
   useEffect(() => {
@@ -40,7 +45,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  const actions = { openSearch: () => setSearching(true), openNewJob: () => setNewJob(true) };
+  const actions = { openSearch: () => setSearching(true), openNewJob: () => setNewJob(true), openChat: setChatWith };
 
   return (
     <ShellContext.Provider value={actions}>
@@ -54,6 +59,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       </div>
       <NewJobSheet open={newJob} onClose={() => setNewJob(false)} />
       <SearchPalette open={searching} onClose={() => setSearching(false)} />
+      <ChatSheet outreachId={chatWith} onClose={() => setChatWith(null)} />
     </ShellContext.Provider>
   );
 }

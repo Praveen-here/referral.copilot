@@ -11,16 +11,16 @@ Modular monolith: one API process, no queue/worker, no Redis. Background work (d
 ## Components
 | Component | Responsibility |
 |---|---|
-| `apps/web` | Client-rendered pages (`(app)/` = authed area: Today, company page, profile; `login/`). Data via TanStack Query with refetch-on-focus. Key UI units: `person-row` (per-stage one-click actions), `message-card` (draft + "Copy & open LinkedIn"), `discovery-panel`, `search-palette` (Ctrl+K), `feedback` (single undo toast + "did you send it?" prompt on tab return) |
+| `apps/web` | Client-rendered pages (`(app)/` = authed area: Today, company page, profile; `login/`). Data via TanStack Query with refetch-on-focus. Key UI units: `person-row` (per-stage one-click actions; Awaiting reply grouped Talking / Waiting / Gone quiet via core `conversationGroup`), `message-card` (draft + "Copy & open LinkedIn"), `chat-sheet` (per-person thread + paste reply, hosted in `app-shell`), `discovery-panel`, `search-palette` (Ctrl+K), `feedback` (single undo toast + "did you send it?" prompt on tab return) |
 | `apps/api` routes | REST under `/api/v1`, Zod-validated, `requireUser` middleware sets `res.locals.userId`. Errors: `{error:{code,message,details,requestId}}` |
 | `services/outreach` | `applyEvent`: transition + optimistic-lock (`version`) + event log + auto-drafts; `undoLastEvent` (2 min window); reserve promotion |
 | `services/discovery` | Discovery run: analyze job → plan queries → search → verify → classify (AI) → score → save top 15 + 10 reserves. Progress on `discovery_run` row; UI polls |
 | `services/openings` + `feeds` | Early job alerts: reads public job feeds (`feeds.ts`), diffs IDs against `job_posting`, lists openings, turns one into a job. Scan on open (>2 h) or via `/api/cron/openings`; seed boards in `openings-seed.ts`; `board-finder.ts` finds missing boards by search (one-off script `src/scripts/find-boards.ts`); filters in `core/postings.ts` |
 | `services/jobs` | Job posting reader (Greenhouse/Lever public APIs; LinkedIn URLs → "paste the JD", never fetched) and `ensureAnalysis` (AI, with rule fallback) |
 | `services/messages` | `generateDraft`: facts → Gemini writes → code checks → one corrective retry → template fallback; Rewrite styles; in-flight dedupe |
-| `services/replies` | `readReply`: AI classifies a pasted reply → suggested event + outcome-specific draft (thank-you / resume / answer) |
+| `services/replies` | `readReply`: AI classifies a pasted reply → suggested event + outcome-specific draft (thank-you / resume / answer); `getConversation` (thread for the chat sheet); `logOwnMessage` ("I sent something else") |
 | `services/discovery` (paste) | `addPastedPeople`: AI extracts people from a copied LinkedIn page, every value must appear verbatim, then the same verify/rank/save as web results |
-| `services/views` | Read models: sidebar, job detail, Today, invite budget. Today page and sidebar badges show only messages ready + cleanup (no follow-up/check items, DECISIONS #24) |
+| `services/views` | Read models: sidebar, job detail, Today, invite budget. Badge and Today's "Messages ready" = `readyToSend` (referral request or drafted answer); Today shows no follow-up/check items (DECISIONS #24); `personDetail` for the chat sheet |
 | `packages/core` | All decision logic (pure, unit-tested) |
 | `packages/ai` | `runTask`: JSON-schema output → Zod validate → one repair retry → next provider |
 

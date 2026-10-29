@@ -77,10 +77,15 @@ export function MessageCard({
   // server never writes two at once.
   const saving = useIsMutating({ mutationKey: OUTREACH_EVENT_KEY }) > 0;
 
-  // The server returns the open draft of this kind, AI-writing one if needed (a few seconds).
+  // The server returns the open draft of this kind, writing one if needed (AI: a few seconds).
   const { data: draft, error } = useQuery<Draft>({
     queryKey,
-    queryFn: () => api<Draft>(`/outreach/${person.id}/drafts`, { method: "POST", json: { template } }),
+    // Follow-up nudges use the template: short, and often never sent, so not worth an AI call.
+    queryFn: () =>
+      api<Draft>(`/outreach/${person.id}/drafts`, {
+        method: "POST",
+        json: { template, writer: template.startsWith("FOLLOW_UP") ? "template" : "ai" },
+      }),
     initialData: existing ?? undefined,
     enabled: !saving,
     staleTime: Infinity,

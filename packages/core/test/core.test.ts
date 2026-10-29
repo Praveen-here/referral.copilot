@@ -4,6 +4,8 @@ import {
   OUTREACH_EVENTS,
   OUTREACH_STATES,
   attentionFor,
+  conversationGroup,
+  readyToSend,
   renderTemplate,
   stripDashes,
   transition,
@@ -173,5 +175,25 @@ describe("job IDs safe to quote", () => {
     expect(companyJobId({ externalJobId: "R-12345", url: "https://www.linkedin.com/jobs/view/4471337817/" })).toBe("R-12345");
     expect(companyJobId({ externalJobId: "8172508", url: "https://job-boards.greenhouse.io/stripe/jobs/8172508" })).toBe("8172508");
     expect(companyJobId({ externalJobId: null, url: null })).toBeNull();
+  });
+});
+
+describe("ready to send and conversation groups", () => {
+  it("counts referral requests and drafted answers, not follow-ups", () => {
+    expect(readyToSend("ACCEPTED_MESSAGE_READY", null)).toBe(true);
+    expect(readyToSend("IN_CONVERSATION", "REPLY_RESPONSE")).toBe(true);
+    expect(readyToSend("AWAITING_REPLY", "FOLLOW_UP")).toBe(false);
+    expect(readyToSend("AWAITING_REPLY", null)).toBe(false);
+  });
+  const ago = (days: number) => new Date(NOW.getTime() - days * DAY);
+  it("puts people who replied in talking, others in waiting", () => {
+    expect(conversationGroup({ state: "AWAITING_REPLY", lastSentAt: ago(2), lastReplyAt: null }, NOW)).toBe("waiting");
+    expect(conversationGroup({ state: "AWAITING_REPLY", lastSentAt: ago(1), lastReplyAt: ago(3) }, NOW)).toBe("talking");
+    expect(conversationGroup({ state: "IN_CONVERSATION", lastSentAt: ago(30), lastReplyAt: null }, NOW)).toBe("talking");
+  });
+  it("lets a thread go quiet after 14 days of nothing while we wait", () => {
+    expect(conversationGroup({ state: "AWAITING_REPLY", lastSentAt: ago(14), lastReplyAt: null }, NOW)).toBe("quiet");
+    expect(conversationGroup({ state: "AWAITING_REPLY", lastSentAt: ago(20), lastReplyAt: ago(16) }, NOW)).toBe("quiet");
+    expect(conversationGroup({ state: "AWAITING_REPLY", lastSentAt: ago(20), lastReplyAt: ago(3) }, NOW)).toBe("talking");
   });
 });

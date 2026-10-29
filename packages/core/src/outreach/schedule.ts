@@ -64,3 +64,35 @@ export function attentionFor(
       return null;
   }
 }
+
+/** Drafted answers to something they said (resume, reply, thanks). These wait for the user to send. */
+export const ANSWER_DRAFT_KINDS = ["RESUME_SHARE", "REPLY_RESPONSE", "THANK_YOU", "THANKS_ANYWAY"] as const;
+
+/**
+ * True when a written message is just waiting to be sent: the referral request after
+ * they accepted, or a drafted answer to their reply. This is what the company badge counts.
+ */
+export function readyToSend(state: OutreachState, openDraftKind: string | null): boolean {
+  if (state === "ACCEPTED_MESSAGE_READY") return true;
+  return openDraftKind !== null && (ANSWER_DRAFT_KINDS as readonly string[]).includes(openDraftKind);
+}
+
+/** After this long with no word from either side, a thread drops into "Gone quiet". */
+export const QUIET_DAYS = 14;
+
+export type ConversationGroup = "talking" | "waiting" | "quiet";
+
+/**
+ * Groups the Awaiting reply tab without asking anyone to check anything:
+ * "talking" = they've replied at least once, "waiting" = no reply yet,
+ * "quiet" = we're waiting and nothing happened for QUIET_DAYS (display only; state is untouched).
+ */
+export function conversationGroup(
+  o: { state: OutreachState; lastSentAt: Date | null; lastReplyAt: Date | null },
+  now = new Date(),
+): ConversationGroup {
+  const last = Math.max(o.lastSentAt?.getTime() ?? 0, o.lastReplyAt?.getTime() ?? 0);
+  // IN_CONVERSATION means the next move is ours, so it never goes quiet on its own.
+  if (o.state === "AWAITING_REPLY" && last > 0 && now.getTime() - last >= QUIET_DAYS * DAY) return "quiet";
+  return o.lastReplyAt || o.state === "IN_CONVERSATION" ? "talking" : "waiting";
+}

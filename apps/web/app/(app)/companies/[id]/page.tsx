@@ -5,21 +5,21 @@ import { AnimatePresence, motion } from "motion/react";
 import { ClipboardPaste, ExternalLink, Search, Trash2, UserPlus } from "lucide-react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef, useState } from "react";
-import type { PipelineTab } from "@rc/core";
+import { conversationGroup, type PipelineTab } from "@rc/core";
 import { AddPersonSheet } from "@/components/add-person-sheet";
 import { DiscoveryPanel } from "@/components/discovery-panel";
 import { PastePeopleSheet } from "@/components/paste-people-sheet";
 import { PersonRow } from "@/components/person-row";
-import { Badge, Button, EmptyState, Segmented, Spinner, spring } from "@/components/ui";
+import { Badge, Button, EmptyState, SectionHeader, Segmented, Spinner, spring } from "@/components/ui";
 import { api } from "@/lib/api";
 import { keys, useJob, useRefreshPipeline } from "@/lib/queries";
-import type { Job } from "@/lib/types";
+import type { Job, Person } from "@/lib/types";
 
 const TABS: { value: PipelineTab; label: string; hint: string }[] = [
   { value: "to_connect", label: "To connect", hint: "Open their LinkedIn, send a connection request, then mark it sent." },
   { value: "pending", label: "Pending", hint: "Waiting for them to accept. Check their profile: a Message button means they accepted." },
   { value: "message_ready", label: "Message ready", hint: "They accepted. Copy the message, paste it in LinkedIn, then mark it sent." },
-  { value: "awaiting_reply", label: "Awaiting reply", hint: "Open the chat on LinkedIn and record what happened." },
+  { value: "awaiting_reply", label: "Awaiting reply", hint: "Nothing to check. When someone replies on LinkedIn, tap They replied and paste it." },
   { value: "done", label: "Done", hint: "Referrals, closed threads and people you skipped." },
 ];
 
@@ -226,7 +226,9 @@ function Company() {
               transition={{ ...spring, duration: 0.2 }}
               className="mt-3"
             >
-              {people.length > 0 ? (
+              {people.length > 0 && tab === "awaiting_reply" ? (
+                <Conversations people={people} companyName={name} highlight={highlight} />
+              ) : people.length > 0 ? (
                 <ul className="-mx-3 flex flex-col">
                   {people.map((p) => (
                     <PersonRow key={p.id} person={p} companyName={name} highlighted={highlight === p.id} />
@@ -268,6 +270,60 @@ function Company() {
 
       {jobId && <AddPersonSheet jobId={jobId} open={adding} onClose={() => setAdding(false)} />}
       {jobId && <PastePeopleSheet jobId={jobId} companyName={name} open={pasting} onClose={() => setPasting(false)} />}
+    </div>
+  );
+}
+
+const lastActivity = (p: Person) => Math.max(p.lastSentAt ? Date.parse(p.lastSentAt) : 0, p.lastReplyAt ? Date.parse(p.lastReplyAt) : 0);
+
+/**
+ * Awaiting reply, grouped so nothing piles up: people who replied first, then those
+ * we're waiting on, and threads silent for 2 weeks folded away (display only, state untouched).
+ */
+function Conversations({ people, companyName, highlight }: { people: Person[]; companyName: string; highlight: string | null }) {
+  const now = new Date();
+  const groups = { talking: [] as Person[], waiting: [] as Person[], quiet: [] as Person[] };
+  for (const p of people) {
+    const g = conversationGroup(
+      { state: p.state, lastSentAt: p.lastSentAt ? new Date(p.lastSentAt) : null, lastReplyAt: p.lastReplyAt ? new Date(p.lastReplyAt) : null },
+      now,
+    );
+    groups[g].push(p);
+  }
+  for (const list of Object.values(groups)) list.sort((a, b) => lastActivity(b) - lastActivity(a));
+
+  const list = (items: Person[]) => (
+    <ul className="-mx-3 flex flex-col">
+      {items.map((p) => (
+        <PersonRow key={p.id} person={p} companyName={companyName} highlighted={highlight === p.id} />
+      ))}
+    </ul>
+  );
+
+  return (
+    <div className="flex flex-col gap-7">
+      {groups.talking.length > 0 && (
+        <section>
+          <SectionHeader title="Talking" count={groups.talking.length} />
+          {list(groups.talking)}
+        </section>
+      )}
+      {groups.waiting.length > 0 && (
+        <section>
+          <SectionHeader title="Waiting" count={groups.waiting.length} />
+          {list(groups.waiting)}
+        </section>
+      )}
+      {groups.quiet.length > 0 && (
+        // A highlighted person (from search) opens the fold so they can be seen.
+        <details className="group" open={groups.quiet.some((p) => p.id === highlight) || undefined}>
+          <summary className="cursor-pointer list-none px-1 text-caption font-semibold text-ink-3 hover:text-ink-2">
+            Gone quiet · {groups.quiet.length}
+            <span className="ml-1.5 font-normal">No word for 2 weeks</span>
+          </summary>
+          <div className="mt-2">{list(groups.quiet)}</div>
+        </details>
+      )}
     </div>
   );
 }

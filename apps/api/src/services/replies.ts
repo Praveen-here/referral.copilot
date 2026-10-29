@@ -7,6 +7,7 @@ import { prisma } from "@rc/db";
 import { notFound } from "../http/errors";
 import { runAi } from "./ai";
 import { generateDraft, type DraftKind } from "./messages";
+import { applyEvent } from "./outreach";
 
 const EVENT_FOR: Record<ReplyReading["outcome"], OutreachEvent> = {
   REFERRED: "REFERRED",
@@ -58,4 +59,41 @@ export async function readReply(userId: string, outreachId: string, text: string
     draftId: draft?.id ?? null,
     draftKind: draft?.kind ?? null,
   };
+}
+
+/** The whole thread with one person, oldest first: what we sent, what they said, and any open draft. */
+export async function getConversation(userId: string, outreachId: string) {
+  const o = await prisma.outreach.findFirst({
+    where: { id: outreachId, userId },
+    select: { messages: { where: { status: { in: ["SENT", "DRAFT"] } }, orderBy: { createdAt: "asc" } } },
+  });
+  if (!o) throw notFound("Outreach");
+  return o.messages
+    .map((m) => ({
+      id: m.id,
+      kind: m.kind,
+      status: m.status,
+      body: m.body,
+      at: m.sentAt ?? m.createdAt,
+      fromThem: m.kind === "INBOUND_REPLY",
+      source: (m.factsUsed as { source?: string } | null)?.source ?? "template",
+    }))
+    .sort((a, b) => a.at.getTime() - b.at.getTime());
+}
+
+/**
+ * "I sent something else": the user wrote their own message on LinkedIn instead of the draft.
+ * Logged so the thread (and the AI's next answer) stays accurate; the unsent draft is set aside.
+ */
+export async function logOwnMessage(userId: string, outreachId: string, text: string) {
+  const o = await prisma.outreach.findFirst({ where: { id: outreachId, userId } });
+  if (!o) throw notFound("Outreach");
+  await prisma.$transaction([
+    prisma.message.updateMany({ where: { outreachId, status: "DRAFT", kind: { not: "FOLLOW_UP" } }, data: { status: "DISCARDED" } }),
+    prisma.message.create({
+      data: { outreachId, kind: "REPLY_RESPONSE", status: "SENT", body: stripDashes(text), sentAt: new Date(), factsUsed: { source: "user" }, editedByUser: true },
+    }),
+  ]);
+  // Our turn is over: an open conversation goes back to waiting for them.
+  if (transition(o as unknown as OutreachSnapshot, "MESSAGE_SENT").ok) await applyEvent(userId, outreachId, "MESSAGE_SENT");
 }

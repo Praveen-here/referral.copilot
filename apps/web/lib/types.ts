@@ -10,6 +10,10 @@ export interface Person {
   matchScore: number | null;
   followupCount: number;
   lastSentAt: string | null;
+  /** When they last replied (a pasted reply), if ever. */
+  lastReplyAt: string | null;
+  /** A written message is waiting to be sent: the referral request or an answer to their reply. */
+  readyToSend: boolean;
   stateChangedAt: string;
   nextCheckAt: string | null;
   attention: Attention | null;

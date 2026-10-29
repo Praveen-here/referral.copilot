@@ -35,6 +35,7 @@ export function useRefreshPipeline() {
       qc.invalidateQueries({ queryKey: keys.today }),
       qc.invalidateQueries({ queryKey: keys.sidebar }),
       qc.invalidateQueries({ queryKey: keys.budget }),
+      qc.invalidateQueries({ queryKey: ["thread"] }),
     ]);
 }
 
@@ -93,6 +94,7 @@ function applyOptimistic(qc: QueryClient, personId: string, type: OutreachEvent)
       nextCheckAt: r.next.nextCheckAt?.toISOString() ?? null,
       stateChangedAt: new Date().toISOString(),
       attention: r.next.state === "ACCEPTED_MESSAGE_READY" ? { kind: "MESSAGE_READY" } : null,
+      readyToSend: r.next.state === "ACCEPTED_MESSAGE_READY",
       draft: null,
     };
   };

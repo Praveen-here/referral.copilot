@@ -26,7 +26,7 @@ export default function TodayPage() {
 
   const sections: { title: string; hint: string; items: Person[] }[] = today
     ? [
-        { title: "Messages ready", hint: "They accepted. Copy the message and send it.", items: today.messageReady },
+        { title: "Messages ready", hint: "Written and waiting for you: referral requests and answers to replies.", items: today.messageReady },
         { title: "Clean up", hint: "Old invites and quiet threads worth closing.", items: today.cleanup },
       ].filter((s) => s.items.length > 0)
     : [];

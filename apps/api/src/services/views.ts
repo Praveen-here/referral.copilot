@@ -1,12 +1,16 @@
 // Read models for the UI: everything a screen needs in one request.
 
-import { ACTIVE_STATES, attentionFor, tabForState, type OutreachSnapshot } from "@rc/core";
+import { ACTIVE_STATES, attentionFor, readyToSend, tabForState, type OutreachSnapshot } from "@rc/core";
 import { prisma, type Prisma } from "@rc/db";
 import { notFound } from "../http/errors";
 
 const outreachInclude = {
   contact: { include: { tags: true, educations: true } },
-  messages: { where: { status: "DRAFT" as const }, orderBy: { createdAt: "desc" as const } },
+  // Open drafts, plus their replies so the Awaiting reply tab knows who is talking.
+  messages: {
+    where: { OR: [{ status: "DRAFT" as const }, { kind: "INBOUND_REPLY" as const }] },
+    orderBy: { createdAt: "desc" as const },
+  },
 };
 
 type OutreachRow = Awaited<ReturnType<typeof loadOutreach>>[number];
@@ -34,6 +38,8 @@ function reasonsFor(row: OutreachRow): string[] {
 
 function serialize(row: OutreachRow, now: Date) {
   const snapshot = row as unknown as OutreachSnapshot & { stateChangedAt: Date };
+  const draft = row.messages.find((m) => m.status === "DRAFT");
+  const lastReply = row.messages.find((m) => m.kind === "INBOUND_REPLY");
   return {
     id: row.id,
     version: row.version,
@@ -44,6 +50,8 @@ function serialize(row: OutreachRow, now: Date) {
     matchScore: row.matchScore,
     followupCount: row.followupCount,
     lastSentAt: row.lastSentAt,
+    lastReplyAt: lastReply ? (lastReply.sentAt ?? lastReply.createdAt) : null,
+    readyToSend: readyToSend(row.state, draft?.kind ?? null),
     stateChangedAt: row.stateChangedAt,
     nextCheckAt: row.nextCheckAt,
     attention: attentionFor(snapshot, now),
@@ -59,28 +67,32 @@ function serialize(row: OutreachRow, now: Date) {
       isConnected: row.contact.isConnected,
       source: row.contact.source,
     },
-    draft: row.messages[0]
+    draft: draft
       ? {
-          id: row.messages[0].id,
-          kind: row.messages[0].kind,
-          body: row.messages[0].body,
-          source: (row.messages[0].factsUsed as { source?: string } | null)?.source ?? "template",
+          id: draft.id,
+          kind: draft.kind,
+          body: draft.body,
+          source: (draft.factsUsed as { source?: string } | null)?.source ?? "template",
         }
       : null,
   };
 }
 
-const TODAY_KINDS: string[] = ["MESSAGE_READY", "WITHDRAW_SUGGESTED", "NO_RESPONSE_SUGGESTED"];
-
-/** Companies with active jobs, plus how many people need attention in each. */
+/** Companies with active jobs, plus how many messages are waiting to be sent in each. */
 export async function sidebar(userId: string) {
-  const now = new Date();
   const companies = await prisma.company.findMany({
     where: { userId, jobs: { some: { status: { in: ["ACTIVE", "APPLIED"] } } } },
     include: {
       jobs: {
         where: { status: { in: ["ACTIVE", "APPLIED"] } },
-        select: { id: true, title: true, outreach: { where: { state: { in: [...ACTIVE_STATES] } } } },
+        select: {
+          id: true,
+          title: true,
+          outreach: {
+            where: { state: { in: [...ACTIVE_STATES] } },
+            select: { state: true, messages: { where: { status: "DRAFT" }, select: { kind: true }, orderBy: { createdAt: "desc" }, take: 1 } },
+          },
+        },
       },
     },
     orderBy: { createdAt: "desc" },
@@ -90,13 +102,8 @@ export async function sidebar(userId: string) {
     name: c.name,
     isSample: c.isSample,
     jobs: c.jobs.map((j) => ({ id: j.id, title: j.title })),
-    // Count only what Today shows (follow-ups and checks were removed from Today).
-    attentionCount: c.jobs
-      .flatMap((j) => j.outreach)
-      .filter((o) => {
-        const a = attentionFor(o as unknown as OutreachSnapshot & { stateChangedAt: Date }, now);
-        return a !== null && TODAY_KINDS.includes(a.kind);
-      }).length,
+    // The badge means one thing: messages written and waiting to be sent.
+    attentionCount: c.jobs.flatMap((j) => j.outreach).filter((o) => readyToSend(o.state, o.messages[0]?.kind ?? null)).length,
   }));
 }
 
@@ -120,6 +127,19 @@ export async function jobDetail(userId: string, jobId: string) {
   return { job, people, counts };
 }
 
+/** One person with their job, for the chat sheet (which outlives whichever list opened it). */
+export async function personDetail(userId: string, outreachId: string) {
+  const row = await prisma.outreach.findFirst({
+    where: { id: outreachId, userId },
+    include: { ...outreachInclude, job: { include: { company: true } } },
+  });
+  if (!row) throw notFound("Outreach");
+  return {
+    ...serialize(row, new Date()),
+    job: { id: row.job.id, title: row.job.title, companyId: row.job.companyId, companyName: row.job.company.name },
+  };
+}
+
 /** Everything that needs the user today, across all jobs. */
 export async function today(userId: string) {
   const now = new Date();
@@ -129,11 +149,12 @@ export async function today(userId: string) {
   });
   const items = rows
     .map((r) => ({ ...serialize(r, now), job: { id: r.job.id, title: r.job.title, companyId: r.job.companyId, companyName: r.job.company.name } }))
-    .filter((i) => i.attention !== null);
+    .filter((i) => i.attention !== null || i.readyToSend);
 
-  const group = (kinds: string[]) => items.filter((i) => kinds.includes(i.attention!.kind));
+  const group = (kinds: string[]) => items.filter((i) => i.attention && kinds.includes(i.attention.kind));
   return {
-    messageReady: group(["MESSAGE_READY"]),
+    // Same rule as the company badge: referral requests and drafted answers.
+    messageReady: items.filter((i) => i.readyToSend),
     followUps: group(["FOLLOWUP_DUE"]),
     checkReplies: group(["CHECK_REPLY"]),
     checkAccepted: group(["CHECK_ACCEPTED"]),
