@@ -27,6 +27,15 @@ export function Sidebar() {
       </div>
 
       <nav className="flex flex-col gap-0.5 px-2">
+        {/* Always in view (it used to sit below the company list and scroll away). */}
+        <button
+          onClick={openNewJob}
+          className="pressable flex h-8 items-center gap-2.5 rounded-control px-2.5 text-left text-ink-2 hover:bg-pressed hover:text-ink"
+        >
+          <Plus size={16} className="w-4 text-ink-2" />
+          <span className="flex-1">New job</span>
+          <kbd className="rounded-[4px] border border-line-strong bg-canvas px-1.5 font-sans text-[0.6875rem] text-ink-3">N</kbd>
+        </button>
         <button
           onClick={openSearch}
           className="pressable flex h-8 items-center gap-2.5 rounded-control px-2.5 text-left text-ink-2 hover:bg-pressed hover:text-ink"
@@ -72,13 +81,6 @@ export function Sidebar() {
           );
         })}
         {companies && companies.length === 0 && <p className="px-2.5 py-1.5 text-caption text-ink-3">No active jobs yet</p>}
-        <button
-          onClick={openNewJob}
-          className="pressable mt-1 flex h-8 items-center gap-2.5 rounded-control px-2.5 text-left text-ink-2 hover:bg-pressed hover:text-ink"
-        >
-          <Plus size={16} className="text-ink-3" />
-          New job
-        </button>
       </nav>
 
       <div className="flex flex-col gap-0.5 border-t border-line p-2">

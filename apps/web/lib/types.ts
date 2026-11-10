@@ -42,6 +42,8 @@ export interface Job {
   descriptionRaw: string | null;
   status: "ACTIVE" | "APPLIED" | "CLOSED" | "ARCHIVED";
   companyId: string;
+  /** Set when this role was combined into another job at the same company. */
+  mergedIntoId: string | null;
   createdAt: string;
   company: { id: string; name: string; isSample: boolean };
   analysis: {
@@ -52,8 +54,13 @@ export interface Job {
   } | null;
 }
 
+export type Role = Omit<Job, "company">;
+
 export interface JobDetail {
+  /** The lead job when roles are combined. */
   job: Job;
+  /** Every role asked about in one message: the lead first, then combined roles. Just `job` when not combined. */
+  roles: Role[];
   people: Person[];
   counts: Record<PipelineTab, number>;
 }

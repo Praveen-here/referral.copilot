@@ -2,6 +2,8 @@
 // and later as the fallback when the AI fails validation. Only facts passed in
 // here may appear in a message; nothing is invented.
 
+import { rolesPhrase, sharedCity, type RoleFact } from "../jobs";
+
 export interface FactSheet {
   contactFirstName: string;
   companyName: string;
@@ -16,7 +18,11 @@ export interface FactSheet {
   fitReason?: string | null;
   resumeUrl?: string | null;
   signOffName: string;
+  /** Two or more roles combined into one ask (each with only its real job ID). */
+  roles?: RoleFact[] | null;
 }
+
+const isCombined = (f: FactSheet): f is FactSheet & { roles: RoleFact[] } => (f.roles?.length ?? 0) > 1;
 
 export type TemplateKind =
   | "REFERRAL_REQUEST"
@@ -34,6 +40,7 @@ const ordinal = (n: number) => {
 };
 
 function roleRef(f: FactSheet): string {
+  if (isCombined(f)) return `${rolesPhrase(f.roles)} at ${f.companyName}`;
   const id = f.jobId ? ` (Job ID ${f.jobId})` : "";
   return `the ${f.jobTitle} role at ${f.companyName}${id}`;
 }
@@ -43,7 +50,26 @@ function aboutMe(f: FactSheet): string | null {
   return f.userSemester ? `${f.userDegree}, ${ordinal(f.userSemester)} sem` : f.userDegree;
 }
 
+/** The user's own shape for several roles: one line per role, one ask, the links together. */
+function combinedReferralRequest(f: FactSheet & { roles: RoleFact[] }): string {
+  const me = aboutMe(f);
+  const city = sharedCity(f.roles);
+  const opener = f.sharedInstitution
+    ? `Hi ${f.contactFirstName},\n\nHope you're doing well! I'm a fellow ${f.sharedInstitution} student${me ? ` (${me})` : ""}`
+    : `Hi ${f.contactFirstName},\n\nHope you're doing well! I'm a student${f.userDegree ? ` currently pursuing my ${f.userDegree}` : ""}`;
+  const count = f.roles.length === 2 ? "two" : "three";
+  const lines = f.roles.map((r) => (r.jobId ? `${r.title}, Job ID: ${r.jobId}` : r.title)).join("\n");
+  const either = f.roles.length === 2 ? "either" : "any";
+  const links = f.roles.map((r) => r.url).filter(Boolean);
+  const linkBlock = links.length ? `\n\nHere are the job links:\n${links.join("\n")}` : "";
+  return (
+    `${opener}, and I came across ${count} openings at ${f.companyName}${city ? ` in ${city}` : ""}:\n${lines}\n\n` +
+    `Would you be open to referring me for ${either} of these roles? I'd be happy to share my resume.${linkBlock}\n\nThanks,\n${f.signOffName}`
+  );
+}
+
 function referralRequest(f: FactSheet, seed: number): string {
+  if (isCombined(f)) return combinedReferralRequest(f);
   const me = aboutMe(f);
   const opener = f.sharedInstitution
     ? pick(
@@ -79,6 +105,14 @@ function referralRequest(f: FactSheet, seed: number): string {
   return `${opener} ${role}\n\n${ask}${link}\n\nThanks,\n${f.signOffName}`;
 }
 
+function jobIdsLine(f: FactSheet): string {
+  if (isCombined(f)) {
+    const ids = f.roles.filter((r) => r.jobId).map((r) => `${r.title}: ${r.jobId}`);
+    return ids.length ? ` The Job IDs are ${ids.join(", ")}.` : "";
+  }
+  return f.jobId ? ` The Job ID is ${f.jobId}.` : "";
+}
+
 export function renderTemplate(kind: TemplateKind, f: FactSheet, seed = 0): string {
   switch (kind) {
     case "REFERRAL_REQUEST":
@@ -94,7 +128,7 @@ export function renderTemplate(kind: TemplateKind, f: FactSheet, seed = 0): stri
     case "FOLLOW_UP_2":
       return `Hi ${f.contactFirstName}, one last nudge on ${roleRef(f)}. If it's not possible, no worries, and thanks for reading.\n\n${f.signOffName}`;
     case "RESUME_SHARE":
-      return `Thanks so much, ${f.contactFirstName}! Here's my resume${f.resumeUrl ? `: ${f.resumeUrl}` : " (attached)"}.${f.jobId ? ` The Job ID is ${f.jobId}.` : ""} Let me know if you need anything else from me.\n\n${f.signOffName}`;
+      return `Thanks so much, ${f.contactFirstName}! Here's my resume${f.resumeUrl ? `: ${f.resumeUrl}` : " (attached)"}.${jobIdsLine(f)} Let me know if you need anything else from me.\n\n${f.signOffName}`;
     case "THANK_YOU":
       return `Thank you so much for the referral, ${f.contactFirstName}. Really appreciate you taking the time. I'll keep you posted on how it goes.\n\n${f.signOffName}`;
     case "THANKS_ANYWAY":

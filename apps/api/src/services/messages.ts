@@ -4,11 +4,11 @@
 import { writeMessageTask, type MessageGoal, type MessageStyle } from "@rc/ai";
 import {
   claimsSharedCollege,
-  companyJobId,
   countWords,
   firstName,
   institutionAliases,
   renderTemplate,
+  sharedCity,
   stripDashes,
   validateMessage,
   WORD_LIMITS,
@@ -17,6 +17,7 @@ import {
 import { prisma, type MessageKind } from "@rc/db";
 import { HttpError, notFound } from "../http/errors";
 import { runAi } from "./ai";
+import { rolesForJob } from "./combined";
 import { ensureDraft } from "./outreach";
 
 export type DraftKind = TemplateKind | "REPLY_RESPONSE";
@@ -87,18 +88,29 @@ async function writeDraft(
   const jobSkills = new Set([...(analysis.requiredSkills ?? []), ...(analysis.preferredSkills ?? [])].map((s) => s.toLowerCase()));
   const matchingSkills = (profile?.skills ?? []).filter((s) => jobSkills.has(s.toLowerCase())).slice(0, 4);
   const recipient = firstName(o.contact.fullName);
-  // Only the company's own job ID is worth quoting; a LinkedIn posting number isn't one.
-  const jobId = companyJobId(o.job);
+  // Every open role combined with this job (just this one when it isn't combined). Each
+  // carries only the company's own job ID; a LinkedIn posting number isn't one.
+  const roles = await rolesForJob(prisma, userId, o.job);
+  const combined = roles.length > 1;
+  const jobId = combined ? null : roles[0]!.jobId;
+  const city = sharedCity(roles);
+  const roleFacts: Record<string, string> = combined
+    ? Object.fromEntries(
+        roles.flatMap((r, i) => [
+          [`role${i + 1}`, r.title],
+          ...(r.jobId ? [[`role${i + 1}JobId`, r.jobId]] : []),
+          ...(r.url ? [[`role${i + 1}Link`, r.url]] : []),
+        ]),
+      )
+    : { role: roles[0]!.title, ...(jobId ? { jobId } : {}), ...(roles[0]!.url ? { jobLink: roles[0]!.url } : {}) };
 
   // Only stored, verified facts reach the model.
   const facts: Record<string, string> = {
     recipientFirstName: recipient,
     ...(o.contact.currentTitle ? { recipientTitle: o.contact.currentTitle } : {}),
     company: o.job.company.name,
-    role: o.job.title,
-    ...(jobId ? { jobId } : {}),
-    ...(o.job.location ? { jobLocation: o.job.location.split(",")[0]!.trim() } : {}),
-    ...(o.job.url ? { jobLink: o.job.url } : {}),
+    ...roleFacts,
+    ...(city ? { jobLocation: city } : {}),
     ...(isAlumni && college ? { sharedCollege: college } : {}),
     ...(college ? { yourCollege: college } : {}),
     yourStatus: ["current", profile?.degree, "student", profile?.currentSemester ? `(${ordinal(profile.currentSemester)} semester)` : null, college ? `at ${college}` : null]
@@ -115,7 +127,9 @@ async function writeDraft(
   const goal: MessageGoal = kind === "REFERRAL_REQUEST" && isRecruiter ? "RECRUITER_INTRO" : kind;
 
   // "Shorter" must actually be shorter: about 25% under the current draft.
-  let maxWords = MAX_WORDS[goal];
+  const firstAsk = goal === "REFERRAL_REQUEST" || goal === "RECRUITER_INTRO";
+  // Each extra role adds a line and a link.
+  let maxWords = MAX_WORDS[goal] + (firstAsk ? 20 * (roles.length - 1) : 0);
   if (opts.style === "shorter" && opts.replaceMessageId) {
     const current = await prisma.message.findUnique({ where: { id: opts.replaceMessageId }, select: { body: true } });
     const currentWords = current ? countWords(current.body) : maxWords;
@@ -142,11 +156,21 @@ async function writeDraft(
     if (!isAlumni && claimsSharedCollege(body, college ? institutionAliases(college) : [])) {
       issues.push("Claims or implies the recipient studied at the same college, but they did not; remove that");
     }
-    const firstAsk = goal === "REFERRAL_REQUEST" || goal === "RECRUITER_INTRO";
-    if (firstAsk && jobId && !body.includes(jobId)) issues.push(`Must include the job ID ${jobId}`);
-    if (firstAsk && !body.toLowerCase().includes(o.job.company.name.toLowerCase())) issues.push(`Must name the company (${o.job.company.name})`);
-    if (firstAsk && o.job.url && !body.includes(o.job.url)) issues.push("Must include the job link on its own line, introduced as 'Here's the job link:'");
-    if (!jobId && /\bjob\s*id\b/i.test(body)) issues.push("Don't mention a job ID; none is known. Use the job link instead");
+    if (firstAsk) {
+      for (const r of roles) {
+        if (combined && !body.toLowerCase().includes(r.title.toLowerCase())) issues.push(`Must name the role "${r.title}"`);
+        if (r.jobId && !body.includes(r.jobId)) issues.push(`Must include the job ID ${r.jobId}${combined ? ` for ${r.title}` : ""}`);
+        if (r.url && !body.includes(r.url)) {
+          issues.push(
+            combined
+              ? `Must include the link ${r.url} on its own line under 'Here are the job links:'`
+              : "Must include the job link on its own line, introduced as 'Here's the job link:'",
+          );
+        }
+      }
+      if (!body.toLowerCase().includes(o.job.company.name.toLowerCase())) issues.push(`Must name the company (${o.job.company.name})`);
+    }
+    if (!roles.some((r) => r.jobId) && /\bjob\s*ids?\b/i.test(body)) issues.push("Don't mention a job ID; none is known. Use the job link instead");
     if (!new RegExp(`^(hi|hello|hey)\\s+${recipient}\\b`, "i").test(body)) issues.push(`Must start with "Hi ${recipient},"`);
     // The sender is a student; only the recipient can be the alum.
     if (/\b(as|we're|we are|i'm|i am)\s+(a\s+)?(fellow\s+)?(alumn(us|a|i)|alums?|graduates?)\b/i.test(body)) {
@@ -183,9 +207,10 @@ async function writeDraft(
       renderTemplate(kind, {
         contactFirstName: recipient,
         companyName: o.job.company.name,
-        jobTitle: o.job.title,
+        jobTitle: roles[0]!.title,
         jobId,
-        jobUrl: o.job.url,
+        jobUrl: roles[0]!.url,
+        roles,
         sharedInstitution: isAlumni ? college : null,
         userDegree: profile?.degree ?? null,
         userSemester: profile?.currentSemester ?? null,
@@ -196,7 +221,7 @@ async function writeDraft(
     );
   }
 
-  const factsUsed = { source, goal, style: opts.style ?? "default" };
+  const factsUsed = { source, goal, style: opts.style ?? "default", ...(combined ? { roles: roles.length } : {}) };
   if (opts.replaceMessageId) {
     return prisma.message.update({ where: { id: opts.replaceMessageId }, data: { body, factsUsed, editedByUser: false } });
   }
@@ -209,6 +234,7 @@ async function writeDraft(
 function tidyLayout(body: string) {
   return body
     .replace(/\s*(Here's the job link:)/i, "\n\n$1")
+    .replace(/\s*(Here are the job links:)\s*/i, "\n\n$1\n")
     .replace(/\s*\n?\s*(Thanks,)\s*\n?\s*/i, "\n\n$1\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
@@ -234,4 +260,29 @@ export async function getOrWriteDraft(userId: string, outreachId: string, kind: 
   if (kind === "REPLY_RESPONSE") throw notFound("Draft");
   if (writer === "template") return prisma.$transaction((tx) => ensureDraft(tx, userId, outreachId, kind));
   return generateDraft(userId, outreachId, kind);
+}
+
+/**
+ * After roles are combined or separated, rewrites the unsent referral requests in those
+ * jobs so they ask about the right roles. Drafts the user edited are left alone. One at a
+ * time in the background: each is an AI call, and the free tiers are rate limited.
+ */
+export async function refreshReferralDrafts(userId: string, jobIds: string[]) {
+  const drafts = await prisma.message.findMany({
+    where: {
+      kind: "REFERRAL_REQUEST",
+      status: "DRAFT",
+      editedByUser: false,
+      outreach: { userId, jobId: { in: jobIds }, state: "ACCEPTED_MESSAGE_READY" },
+    },
+    select: { id: true, outreachId: true },
+    take: 20,
+  });
+  for (const d of drafts) {
+    try {
+      await generateDraft(userId, d.outreachId, "REFERRAL_REQUEST", { replaceMessageId: d.id });
+    } catch (e) {
+      console.warn(`Could not refresh draft ${d.id}: ${(e as Error).message}`);
+    }
+  }
 }

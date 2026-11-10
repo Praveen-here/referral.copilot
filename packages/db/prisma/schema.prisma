@@ -189,12 +189,18 @@ model JobOpportunity {
   analysis       Json?
   status         JobStatus      @default(ACTIVE)
   deadline       DateTime?
+  /// Set when the user combined this job into another at the same company: one people
+  /// list, and the referral message asks about every role. Clearing it separates them again.
+  mergedIntoId   String?
+  mergedInto     JobOpportunity?  @relation("CombinedRoles", fields: [mergedIntoId], references: [id], onDelete: SetNull)
+  combinedRoles  JobOpportunity[] @relation("CombinedRoles")
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
   outreach       Outreach[]
   discoveryRuns  DiscoveryRun[]
 
   @@index([userId, status])
+  @@index([mergedIntoId])
   @@map("job_opportunity")
 }
 

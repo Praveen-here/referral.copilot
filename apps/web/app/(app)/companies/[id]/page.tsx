@@ -2,18 +2,21 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "motion/react";
-import { ClipboardPaste, ExternalLink, Search, Trash2, UserPlus } from "lucide-react";
+import { ClipboardPaste, ExternalLink, Layers, Pencil, Search, Trash2, Unlink, UserPlus } from "lucide-react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef, useState } from "react";
-import { conversationGroup, type PipelineTab } from "@rc/core";
+import { conversationGroup, MAX_COMBINED_ROLES, type PipelineTab } from "@rc/core";
 import { AddPersonSheet } from "@/components/add-person-sheet";
+import { CombineRolesSheet } from "@/components/combine-roles-sheet";
+import { EditRoleSheet } from "@/components/edit-role-sheet";
 import { DiscoveryPanel } from "@/components/discovery-panel";
+import { useFeedback } from "@/components/feedback";
 import { PastePeopleSheet } from "@/components/paste-people-sheet";
 import { PersonRow } from "@/components/person-row";
 import { Badge, Button, EmptyState, SectionHeader, Segmented, Spinner, spring } from "@/components/ui";
-import { api } from "@/lib/api";
+import { api, ApiError } from "@/lib/api";
 import { keys, useJob, useRefreshPipeline } from "@/lib/queries";
-import type { Job, Person } from "@/lib/types";
+import type { Job, Person, Role } from "@/lib/types";
 
 const TABS: { value: PipelineTab; label: string; hint: string }[] = [
   { value: "to_connect", label: "To connect", hint: "Open their LinkedIn, send a connection request, then mark it sent." },
@@ -50,12 +53,18 @@ function Company() {
     queryKey: keys.company(id),
     queryFn: () => api<{ id: string; name: string; isSample: boolean; jobs: Job[] }>(`/companies/${id}`),
   });
-  const activeJobs = company?.jobs.filter((j) => j.status !== "ARCHIVED") ?? [];
-  const jobId = search.get("job") ?? activeJobs[0]?.id ?? null;
+  // Combined roles show as their lead job; a link to a combined role opens the lead.
+  const activeJobs = company?.jobs.filter((j) => j.status !== "ARCHIVED" && !j.mergedIntoId) ?? [];
+  const linkedJob = search.get("job");
+  const jobId = (linkedJob && company?.jobs.find((j) => j.id === linkedJob)?.mergedIntoId) || linkedJob || activeJobs[0]?.id || null;
+  const combinedCount = (leadId: string) => 1 + (company?.jobs.filter((j) => j.mergedIntoId === leadId).length ?? 0);
   const { data: detail } = useJob(jobId);
   const [tab, setTab] = useState<PipelineTab>(() => (search.get("tab") as PipelineTab | null) ?? "to_connect");
   const [adding, setAdding] = useState(false);
   const [pasting, setPasting] = useState(false);
+  const [combining, setCombining] = useState(false);
+  const [editing, setEditing] = useState<Role | null>(null);
+  const { toast } = useFeedback();
   const [highlight, setHighlight] = useState<string | null>(null);
 
   // Links from search (?tab=…&person=…) open the right tab and bring that person into view.
@@ -93,6 +102,36 @@ function Company() {
     onSuccess: () => Promise.all([refresh(), qc.invalidateQueries({ queryKey: keys.company(id) })]),
   });
 
+  const separate = useMutation({
+    mutationFn: (leadId: string) => api<{ jobIds: string[] }>(`/jobs/${leadId}/separate`, { method: "POST" }),
+    onSuccess: async ({ jobIds }, leadId) => {
+      const reload = () => Promise.all([refresh(), qc.invalidateQueries({ queryKey: keys.company(id) })]);
+      await reload();
+      const others = jobIds.filter((j) => j !== leadId);
+      toast({
+        message: "Roles separated",
+        action: { label: "Undo", onClick: () => api(`/jobs/${leadId}/combine`, { method: "POST", json: { jobIds: others } }).then(reload) },
+      });
+    },
+  });
+
+  const deleteRole = useMutation({
+    mutationFn: (role: Role) => api(`/jobs/${role.id}`, { method: "DELETE" }),
+    onSuccess: async (_d, role) => {
+      const wasLast = (company?.jobs.length ?? 0) <= 1;
+      await Promise.all([refresh(), qc.invalidateQueries({ queryKey: keys.company(id) })]);
+      // The shown job is gone: go to the company's next job (a combined group keeps its other roles), or home.
+      if (wasLast) router.replace("/");
+      else if (role.id === jobId) router.replace(`/companies/${id}`);
+      toast({ message: `Deleted ${role.title}` });
+    },
+    onError: (e) => toast({ message: e instanceof ApiError ? e.message : "Couldn't delete the role" }),
+  });
+
+  const confirmDelete = (role: Role) => {
+    if (window.confirm(`Delete the ${role.title} role and the people found for it? This can't be undone.`)) deleteRole.mutate(role);
+  };
+
   if (!company) return <Loading />;
 
   const job = detail?.job;
@@ -100,6 +139,11 @@ function Company() {
   const reserves = tab === "to_connect" ? (detail?.people.filter((p) => p.tab === "to_connect" && p.isReserve) ?? []) : [];
   const hint = TABS.find((t) => t.value === tab)!.hint;
   const name = company.name.replace(" (sample)", "");
+  const roles: Role[] = detail?.roles ?? [];
+  const isCombined = roles.length > 1;
+  // Roles that could join this one: other open jobs here that aren't combined with anything.
+  const combinable = activeJobs.filter((j) => j.id !== jobId && combinedCount(j.id) === 1 && j.status !== "CLOSED");
+  const canCombine = Boolean(job) && combinable.length > 0 && roles.length < MAX_COMBINED_ROLES;
 
   return (
     <div className="mx-auto max-w-4xl px-4 pt-6 pb-16 sm:px-10 sm:pt-12 sm:pb-24">
@@ -137,7 +181,7 @@ function Company() {
             layoutId="job-switch"
             value={jobId ?? ""}
             onChange={(v) => router.replace(`/companies/${id}?job=${v}`)}
-            options={activeJobs.map((j) => ({ value: j.id, label: j.title }))}
+            options={activeJobs.map((j) => ({ value: j.id, label: combinedCount(j.id) > 1 ? `${j.title} +${combinedCount(j.id) - 1}` : j.title }))}
           />
         </div>
       )}
@@ -146,15 +190,34 @@ function Company() {
         <section className="mt-8 rounded-card border border-line px-5 py-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="min-w-0">
-              <h2 className="text-title">{job.title}</h2>
-              <p className="mt-0.5 text-ink-2">
-                {[job.externalJobId && `Job ID ${job.externalJobId}`, job.location, `added ${new Date(job.createdAt).toLocaleDateString()}`]
-                  .filter(Boolean)
-                  .join(" · ")}
-              </p>
+              {isCombined ? (
+                <>
+                  <h2 className="text-title">{roles.length} roles, one message</h2>
+                  <p className="mt-0.5 text-ink-2">Everyone below is asked about all of them.</p>
+                </>
+              ) : (
+                <>
+                  <h2 className="text-title">{job.title}</h2>
+                  <p className="mt-0.5 text-ink-2">
+                    {[job.externalJobId && `Job ID ${job.externalJobId}`, job.location, `added ${new Date(job.createdAt).toLocaleDateString()}`]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </p>
+                </>
+              )}
             </div>
-            <div className="flex items-center gap-1.5">
-              {job.url && (
+            <div className="flex flex-wrap items-center gap-1.5">
+              {canCombine && (
+                <Button size="sm" variant="ghost" icon={<Layers size={14} />} onClick={() => setCombining(true)}>
+                  {isCombined ? "Add role" : "Combine roles"}
+                </Button>
+              )}
+              {isCombined && (
+                <Button size="sm" variant="ghost" icon={<Unlink size={14} />} loading={separate.isPending} onClick={() => separate.mutate(job.id)}>
+                  Separate
+                </Button>
+              )}
+              {!isCombined && job.url && (
                 <Button size="sm" variant="ghost" icon={<ExternalLink size={14} />} onClick={() => window.open(job.url!, "_blank", "noopener")}>
                   Posting
                 </Button>
@@ -170,8 +233,39 @@ function Company() {
                 <option value="CLOSED">Closed</option>
                 <option value="ARCHIVED">Archived</option>
               </select>
+              {!isCombined && <RoleActions role={job} onEdit={setEditing} onDelete={confirmDelete} deleting={deleteRole.isPending} />}
             </div>
           </div>
+          {isCombined && (
+            <ul className="mt-3 flex flex-col divide-y divide-line border-t border-line">
+              {roles.map((r) => (
+                <li key={r.id} className="flex items-center justify-between gap-3 py-2.5">
+                  <div className="min-w-0">
+                    <p className="truncate font-medium text-ink">{r.title}</p>
+                    <p className="truncate text-caption text-ink-3">
+                      {[r.externalJobId ? `Job ID ${r.externalJobId}` : "No job ID", r.location, r.status === "CLOSED" && "Closed, left out of new messages"]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-0.5">
+                    {r.url && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        icon={<ExternalLink size={14} />}
+                        aria-label={`Open the ${r.title} posting`}
+                        onClick={() => window.open(r.url!, "_blank", "noopener")}
+                      >
+                        <span className="hidden sm:inline">Posting</span>
+                      </Button>
+                    )}
+                    <RoleActions role={r} onEdit={setEditing} onDelete={confirmDelete} deleting={deleteRole.isPending && deleteRole.variables?.id === r.id} />
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
           {job.analysis && (
             <div className="mt-3 flex flex-col gap-1.5 border-t border-line pt-3 text-caption">
               <p className="text-ink-2">
@@ -268,9 +362,38 @@ function Company() {
         </>
       )}
 
+      <EditRoleSheet companyId={id} role={editing} onClose={() => setEditing(null)} />
+      {job && (
+        <CombineRolesSheet
+          companyId={id}
+          lead={job}
+          current={roles.length ? roles : [job]}
+          candidates={combinable}
+          open={combining}
+          onClose={() => setCombining(false)}
+        />
+      )}
       {jobId && <AddPersonSheet jobId={jobId} open={adding} onClose={() => setAdding(false)} />}
       {jobId && <PastePeopleSheet jobId={jobId} companyName={name} open={pasting} onClose={() => setPasting(false)} />}
     </div>
+  );
+}
+
+/** Edit and delete for one role: quiet icon buttons, labelled for screen readers. */
+function RoleActions({ role, onEdit, onDelete, deleting }: { role: Role; onEdit: (r: Role) => void; onDelete: (r: Role) => void; deleting: boolean }) {
+  return (
+    <>
+      <Button size="sm" variant="ghost" icon={<Pencil size={14} />} aria-label={`Edit the ${role.title} role`} title="Edit role" onClick={() => onEdit(role)} />
+      <Button
+        size="sm"
+        variant="ghost"
+        icon={<Trash2 size={14} />}
+        loading={deleting}
+        aria-label={`Delete the ${role.title} role`}
+        title="Delete role"
+        onClick={() => onDelete(role)}
+      />
+    </>
   );
 }
 

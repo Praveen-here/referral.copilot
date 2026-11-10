@@ -9,6 +9,7 @@ import {
 } from "@rc/core";
 import { prisma, type MessageKind, type Prisma } from "@rc/db";
 import { HttpError, notFound } from "../http/errors";
+import { rolesForJob } from "./combined";
 
 const UNDO_WINDOW_MS = 2 * 60 * 1000;
 
@@ -181,6 +182,9 @@ export async function ensureDraft(tx: Tx, userId: string, outreachId: string, te
   const projects = (profile?.projects ?? []) as { oneLiner?: string }[];
   const alumni = o.contact.tags.some((t) => t.tag === "COLLEGE_ALUMNI");
   const settings = (profile?.settings ?? {}) as { signOffName?: string };
+  // Combined roles: the template asks about every open role in the group.
+  const roles = await rolesForJob(tx, userId, o.job);
+  const single = roles.length === 1 ? roles[0]! : null;
 
   const body = stripDashes(
     renderTemplate(
@@ -188,9 +192,11 @@ export async function ensureDraft(tx: Tx, userId: string, outreachId: string, te
       {
         contactFirstName: firstName(o.contact.fullName),
         companyName: o.job.company.name,
-        jobTitle: o.job.title,
-        jobId: o.job.externalJobId,
-        jobUrl: o.job.url,
+        jobTitle: roles[0]!.title,
+        // Only the company's real job ID (a LinkedIn posting number isn't one).
+        jobId: single?.jobId ?? null,
+        jobUrl: roles[0]!.url,
+        roles,
         sharedInstitution: alumni ? (o.user.educations[0]?.institutionRaw ?? null) : null,
         userDegree: profile?.degree ?? null,
         userSemester: profile?.currentSemester ?? null,

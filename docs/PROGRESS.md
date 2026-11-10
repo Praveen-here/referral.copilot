@@ -1,5 +1,5 @@
 # Progress
-_Last updated: 2026-10-29. Keep this file short; replace, don't append._
+_Last updated: 2026-11-10. Keep this file short; replace, don't append._
 
 ## Status
 Live at https://referral-copilot.onrender.com (Render, auto-deploys from `main`). Used for real outreach. Database = Neon `production` branch (fresh: earlier data on the deleted `dev` branch was lost 2026-10-21; user re-adding jobs). Last push (2026-10-29): web app manifest (home-screen app without address bar), after conversations (`2bb9350`: badge = messages to send, Awaiting reply groups, Nudge, per-person chat).
@@ -21,6 +21,11 @@ Live at https://referral-copilot.onrender.com (Render, auto-deploys from `main`)
 - **Board finder (2026-10-25)**: `services/board-finder.ts` finds a company's Workday/Greenhouse/Lever/Ashby board via `site:` search, keeps it only if tenant/slug matches the company and the feed answers (DECISIONS #23). One run over the research CSV added 10 seed boards (Micron, Broadcom, Cisco, Walmart Global Tech, Wells Fargo, Expedia, Visa, Emergent, Paytm Payments). Intern/apprentice/grad programs whose title names no field are now kept unless they name a business function (Walmart "(IND) Grad Intern - No Work Experience"); Workday and Amazon readers also search "apprentice". intern-list.com reverse-engineered: Jobright's US-only index in Airtable, nothing for India.
 - Research (2026-10-24, `docs/research/reports/`): where Indian tech interns are posted (+ 204-company CSV), which channels lead to offers (referrals ≫ cold email > contests > posts), Reddit/LinkedIn/X findings; debugwithshubham.com reverse-engineered (DECISIONS #21)
 - Docs: CLAUDE.md + `docs/` (architecture, development, decisions, API, preferences, research, roadmap)
+
+- **Combined roles (2026-11-10, not yet live)**: on a company with 2+ open jobs, "Combine roles" (job card) picks up to 3; they show as one entry ("<title> +1" in the switcher) with every role listed, one people list, and one referral message naming each role with its real job ID and link (user's HPE shape). "Separate" splits them (Undo toast). DECISIONS #27. Migration `20261110120000_combined_roles` (adds `job_opportunity.mergedIntoId`) is applied to Neon `production` (2026-11-10); core tests pass, typecheck clean, AI draft checked on sample data, UI not browser-tested. Also fixed: template drafts quoted the raw `externalJobId` (could be a LinkedIn number)
+
+- **Edit / delete a role (2026-11-10)**: pencil and trash on the job card (on each role row when combined). Edit fixes title, job ID (warns if it's LinkedIn's posting number), link, location, description; unsent unedited referral drafts are rewritten. Delete removes one role and its people (confirm dialog); deleting a combined group's lead keeps the others combined. Combined roles now show each person once in every tab, Today and the badge (furthest conversation wins). Checked on sample data against the DB; UI not browser-tested
+- **Desktop New job (2026-11-10)**: moved from the bottom of the sidebar's company list (scrolled out of view) to the top of the sidebar, styled like Search/Today/Openings (user: no blue background); "N" opens it anywhere (not while typing or with a sheet open)
 
 ## In progress
 - Accuracy check on real jobs (target ≥12/15 correct); tune from user feedback

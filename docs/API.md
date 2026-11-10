@@ -17,7 +17,9 @@ Express, all under `/api/v1` (session required, scoped to `res.locals.userId`), 
 | POST `/openings/:id/add` | Opening → job + start discovery; returns `{jobId, companyId}` | openings |
 | POST / DELETE `/openings/:id/dismiss` | Hide an opening / undo | openings |
 | POST `/jobs/read-url` | Read a Greenhouse/Lever posting; LinkedIn → `needsPaste` | jobs |
-| GET / PATCH / DELETE `/jobs/:id` | Job detail with people, counts / edit (title/JD edit clears analysis; CLOSED cascades) / delete | views |
+| GET / PATCH / DELETE `/jobs/:id` | Job detail with people, counts, `roles` (combined roles: any role's ID returns the lead job, every role, one de-duplicated people list) / edit (title/JD edit clears analysis; status applies to every combined role; CLOSED cascades; a changed title/job ID/link/location rewrites unedited referral drafts) / delete one role and its people (a deleted lead hands its combined group to the oldest remaining role) | views, combined |
+| POST `/jobs/:id/combine` `{jobIds}` | Combine other roles at the same company into this one (max 3 roles); rewrites unedited referral drafts in the background | combined |
+| POST `/jobs/:id/separate` | Split combined roles back into separate jobs; returns `{jobIds}` (the UI's Undo re-combines them) | combined |
 | POST `/jobs/:id/discover` | Start discovery run (async) | discovery |
 | GET `/jobs/:id/discovery` | Latest run + `searchConfigured` | discovery |
 | POST `/jobs/:id/paste-people` `{text, source}` | People from a copied LinkedIn page; `source` = COMPANY_PEOPLE / COMPANY_PEOPLE_COLLEGE / SEARCH | discovery |

@@ -32,13 +32,16 @@ export function AppShell({ children }: { children: ReactNode }) {
   // Hosted here, not in a row: the person can move between lists while the chat is open.
   const [chatWith, setChatWith] = useState<string | null>(null);
 
-  // Ctrl/Cmd+K or "/" opens people search from anywhere.
+  // Ctrl/Cmd+K or "/" opens people search from anywhere; "N" opens New job.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const typing = e.target instanceof HTMLElement && (e.target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(e.target.tagName));
       if ((e.key.toLowerCase() === "k" && (e.ctrlKey || e.metaKey)) || (e.key === "/" && !typing)) {
         e.preventDefault();
         setSearching(true);
+      } else if (e.key.toLowerCase() === "n" && !typing && !e.ctrlKey && !e.metaKey && !e.altKey && !document.querySelector('[role="dialog"]')) {
+        e.preventDefault();
+        setNewJob(true);
       }
     };
     window.addEventListener("keydown", onKey);

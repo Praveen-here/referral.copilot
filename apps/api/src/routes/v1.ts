@@ -1,12 +1,13 @@
 import { Router } from "express";
 import { z } from "zod";
-import { OUTREACH_EVENTS, stripDashes, tabForState } from "@rc/core";
+import { MAX_COMBINED_ROLES, OUTREACH_EVENTS, stripDashes, tabForState } from "@rc/core";
 import { prisma, Prisma } from "@rc/db";
 import { env } from "../env";
 import { HttpError, notFound } from "../http/errors";
 import { addPastedPeople, latestDiscovery, startDiscovery } from "../services/discovery";
 import { ensureAnalysis, readJobPosting } from "../services/jobs";
-import { generateDraft, getOrWriteDraft } from "../services/messages";
+import { combineJobs, deleteRole, groupJobIds, separateJobs } from "../services/combined";
+import { generateDraft, getOrWriteDraft, refreshReferralDrafts } from "../services/messages";
 import { getConversation, logOwnMessage, readReply } from "../services/replies";
 import { searchConfigured } from "../services/search";
 import { applyEvent, undoLastEvent } from "../services/outreach";
@@ -186,23 +187,55 @@ v1.patch("/jobs/:id", async (req, res) => {
   }).parse(req.body);
   // A changed title or description means the stored AI analysis is stale.
   const reanalyze = input.title !== undefined || input.descriptionRaw !== undefined;
-  const { count } = await prisma.jobOpportunity.updateMany({
-    where: { id: id(req.params.id), userId: res.locals.userId },
-    data: { ...input, ...(reanalyze ? { analysis: Prisma.DbNull } : {}) },
+  const userId = res.locals.userId;
+  const { status, ...fields } = input;
+  const job = await prisma.jobOpportunity.findFirst({ where: { id: id(req.params.id), userId }, select: { id: true, mergedIntoId: true } });
+  if (!job) throw notFound("Job");
+  await prisma.jobOpportunity.update({
+    where: { id: job.id },
+    data: { ...fields, ...(reanalyze ? { analysis: Prisma.DbNull } : {}) },
   });
-  if (!count) throw notFound("Job");
-  if (input.status === "CLOSED") {
-    await prisma.outreach.updateMany({
-      where: { jobId: id(req.params.id), state: { in: ["DISCOVERED", "CONNECTION_SENT", "ACCEPTED_MESSAGE_READY", "AWAITING_REPLY", "IN_CONVERSATION"] } },
-      data: { state: "JOB_CLOSED", nextCheckAt: null },
-    });
+  const { ids } = await groupJobIds(prisma, userId, job);
+  // A fixed title, job ID, link or city changes what the referral message should say.
+  if (fields.title !== undefined || fields.externalJobId !== undefined || fields.url !== undefined || fields.location !== undefined) {
+    void refreshReferralDrafts(userId, ids).catch((e) => console.warn("Draft refresh failed", e));
+  }
+  if (status) {
+    // Combined roles are one entry, so applying or closing covers every role in it.
+    await prisma.jobOpportunity.updateMany({ where: { userId, id: { in: ids } }, data: { status } });
+    if (status === "CLOSED") {
+      await prisma.outreach.updateMany({
+        where: { userId, jobId: { in: ids }, state: { in: ["DISCOVERED", "CONNECTION_SENT", "ACCEPTED_MESSAGE_READY", "AWAITING_REPLY", "IN_CONVERSATION"] } },
+        data: { state: "JOB_CLOSED", nextCheckAt: null },
+      });
+    }
   }
   res.json({ ok: true });
 });
 
+/** Combine other roles at the same company into this one: one people list, one message asking about all of them. */
+v1.post("/jobs/:id/combine", async (req, res) => {
+  const userId = res.locals.userId;
+  const { jobIds } = z.object({ jobIds: z.array(z.string().min(1)).min(1).max(MAX_COMBINED_ROLES) }).parse(req.body);
+  const group = await combineJobs(userId, id(req.params.id), jobIds);
+  void refreshReferralDrafts(userId, group).catch((e) => console.warn("Draft refresh failed", e));
+  res.json({ jobIds: group });
+});
+
+/** Split combined roles back into separate jobs (nothing was moved, so everything returns as it was). */
+v1.post("/jobs/:id/separate", async (req, res) => {
+  const userId = res.locals.userId;
+  const group = await separateJobs(userId, id(req.params.id));
+  void refreshReferralDrafts(userId, group).catch((e) => console.warn("Draft refresh failed", e));
+  res.json({ jobIds: group });
+});
+
+/** Deletes one role (and the people found for it). The rest of the company stays. */
 v1.delete("/jobs/:id", async (req, res) => {
-  const { count } = await prisma.jobOpportunity.deleteMany({ where: { id: id(req.params.id), userId: res.locals.userId } });
-  if (!count) throw notFound("Job");
+  const userId = res.locals.userId;
+  const remaining = await deleteRole(userId, id(req.params.id));
+  // Messages that listed the deleted role are rewritten without it.
+  if (remaining.length) void refreshReferralDrafts(userId, remaining).catch((e) => console.warn("Draft refresh failed", e));
   res.status(204).end();
 });
 

@@ -17,7 +17,8 @@ Modular monolith: one API process, no queue/worker, no Redis. Background work (d
 | `services/discovery` | Discovery run: analyze job → plan queries → search → verify → classify (AI) → score → save top 15 + 10 reserves. Progress on `discovery_run` row; UI polls |
 | `services/openings` + `feeds` | Early job alerts: reads public job feeds (`feeds.ts`), diffs IDs against `job_posting`, lists openings, turns one into a job. Scan on open (>2 h) or via `/api/cron/openings`; seed boards in `openings-seed.ts`; `board-finder.ts` finds missing boards by search (one-off script `src/scripts/find-boards.ts`); filters in `core/postings.ts` |
 | `services/jobs` | Job posting reader (Greenhouse/Lever public APIs; LinkedIn URLs → "paste the JD", never fetched) and `ensureAnalysis` (AI, with rule fallback) |
-| `services/messages` | `generateDraft`: facts → Gemini writes → code checks → one corrective retry → template fallback; Rewrite styles; in-flight dedupe |
+| `services/messages` | `generateDraft`: facts → Gemini writes → code checks → one corrective retry → template fallback; Rewrite styles; in-flight dedupe; `refreshReferralDrafts` after roles are combined/separated |
+| `services/combined` | Combined roles: `rolesForJob` (open roles in a job's group, lead first), `combineJobs`, `separateJobs`, `groupJobIds` |
 | `services/replies` | `readReply`: AI classifies a pasted reply → suggested event + outcome-specific draft (thank-you / resume / answer); `getConversation` (thread for the chat sheet); `logOwnMessage` ("I sent something else") |
 | `services/discovery` (paste) | `addPastedPeople`: AI extracts people from a copied LinkedIn page, every value must appear verbatim, then the same verify/rank/save as web results |
 | `services/views` | Read models: sidebar, job detail, Today, invite budget. Badge and Today's "Messages ready" = `readyToSend` (referral request or drafted answer); Today shows no follow-up/check items (DECISIONS #24); `personDetail` for the chat sheet |
@@ -27,7 +28,7 @@ Modular monolith: one API process, no queue/worker, no Redis. Background work (d
 ## Data model (Prisma, `packages/db/prisma/schema.prisma`)
 - Auth tables owned by Better Auth: `user`, `session`, `account`, `verification`.
 - `user_profile` (degree, semester, skills, `projects[0].oneLiner` = fit reason used in messages, `settings` JSON: signOffName, invite caps, weights) + `education` (shared by user and contacts; alumni = school match).
-- `company` (per user) → `job_opportunity` (`analysis` JSON from AI) → `outreach` (one per contact×job; `state`, `nextCheckAt`, `rank`, `isReserve`, `matchScore`, `scoreBreakdown`, `version`).
+- `company` (per user) → `job_opportunity` (`analysis` JSON from AI; `mergedIntoId` = combined into a lead job, DECISIONS #27) → `outreach` (one per contact×job; `state`, `nextCheckAt`, `rank`, `isReserve`, `matchScore`, `scoreBreakdown`, `version`).
 - `contact` (unique per user+LinkedIn URL; `evidence`, `confidence`), `contact_tag` (COLLEGE_ALUMNI, RECRUITER, …).
 - `outreach_event` (append-only log; payload.prev enables undo), `message` (DRAFT/SENT/DISCARDED), `discovery_run`, `ai_run` (every AI attempt logged).
 
