@@ -27,6 +27,8 @@ Live at https://referral-copilot.onrender.com (Render, auto-deploys from `main`)
 - **Edit / delete a role (2026-11-10)**: pencil and trash on the job card (on each role row when combined). Edit fixes title, job ID (warns if it's LinkedIn's posting number), link, location, description; unsent unedited referral drafts are rewritten. Delete removes one role and its people (confirm dialog); deleting a combined group's lead keeps the others combined. Combined roles now show each person once in every tab, Today and the badge (furthest conversation wins). Checked on sample data against the DB; UI not browser-tested
 - **Desktop New job (2026-11-10)**: moved from the bottom of the sidebar's company list (scrolled out of view) to the top of the sidebar, styled like Search/Today/Openings (user: no blue background); "N" opens it anywhere (not while typing or with a sheet open)
 
+- **README (2026-11-11)**: root `README.md` for GitHub with screenshots of the user's real data in `docs/screenshots/` (taken with headless Chrome via a temporary session row, deleted afterwards)
+
 ## In progress
 - Accuracy check on real jobs (target ≥12/15 correct); tune from user feedback
 - User checking the Openings page in the browser (not yet viewed by Claude: needs Google login)

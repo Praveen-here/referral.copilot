@@ -12,3 +12,4 @@ dist/
 packages/db/generated/
 *.tsbuildinfo
 next-env.d.ts
+.claude/settings.local.json
